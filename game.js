@@ -905,6 +905,9 @@ window.__desertLoop.getRaceState = () => ({
     speed: r.drive.speed,
     maxSpeed: r.drive.maxSpeed,
     slipT: r.slipT,
+    aiLane: r.aiLane,
+    reverseT: r.reverseT,
+    passingT: r.passingT,
     x: r.drive.x,
     z: r.drive.z,
     yaw: r.drive.yaw,
@@ -1206,6 +1209,11 @@ async function spawnField(playerId) {
       aiPace: i === 0 ? 1 : i === 1 ? 1.08 : i === 2 ? 1.055 : 1 + Math.random() * 0.08,
       aiPhase: Math.random() * Math.PI * 2,
       laneChangeCooldown: 1 + Math.random() * 2,
+      blockedT: 0,
+      reverseT: 0,
+      passingT: 0,
+      avoidCar: null,
+      avoidDirection: i % 2 === 0 ? 1 : -1,
       wp: Math.ceil(start.t * WAYPOINTS.length + 1) % WAYPOINTS.length,
       lap: 1,
       passedMid: false,
@@ -1655,6 +1663,44 @@ function updatePlayer(dt) {
   speedEl.textContent = String(Math.round(Math.abs(d.speed) * 3.6));
 }
 
+function chooseAiPassingLane(racer, p, side) {
+  const preferred = racer.aiLane <= 0 ? 2.65 : -2.65;
+  const candidates = [preferred, -preferred, 0];
+  for (const candidate of candidates) {
+    const clear = racers.every((other) => {
+      if (other === racer) return true;
+      const dx = other.drive.x - racer.drive.x;
+      const dz = other.drive.z - racer.drive.z;
+      const along = dx * Math.sin(racer.drive.yaw) + dz * Math.cos(racer.drive.yaw);
+      if (along < -7 || along > 14) return true;
+      const otherLat = (other.drive.x - p.x) * side.x + (other.drive.z - p.z) * side.z;
+      const requiredSpace = racer.drive.halfW + other.drive.halfW + 0.55;
+      return Math.abs(otherLat - candidate) > requiredSpace;
+    });
+    if (clear) return candidate;
+  }
+  return null;
+}
+
+function updateAiReverse(racer, dt) {
+  const d = racer.drive;
+  racer.reverseT = Math.max(0, racer.reverseT - dt);
+  d.speed = Math.max(-5.5, d.speed - d.brake * 0.7 * dt);
+  d.yaw += racer.avoidDirection * d.steer * 0.55 * dt;
+  d.x += Math.sin(d.yaw) * d.speed * dt;
+  d.z += Math.cos(d.yaw) * d.speed * dt;
+  resolveCollisions(racer);
+  applyPose(racer, -racer.avoidDirection);
+  updateVehicleEffects(racer, dt, false, true);
+  updateLap(racer);
+  if (racer.reverseT <= 0) {
+    d.speed = 3;
+    racer.blockedT = 0;
+    racer.laneChangeCooldown = 1.2;
+    racer.passingT = 4;
+  }
+}
+
 function updateAI(racer, dt) {
   if (racer.wrecked) {
     racer.drive.speed = 0;
@@ -1670,6 +1716,12 @@ function updateAI(racer, dt) {
   }
   const d = racer.drive;
   racer.laneChangeCooldown = Math.max(0, racer.laneChangeCooldown - dt);
+  racer.passingT = Math.max(0, racer.passingT - dt);
+  if (racer.passingT <= 0) racer.avoidCar = null;
+  if (racer.reverseT > 0) {
+    updateAiReverse(racer, dt);
+    return;
+  }
   const look = WAYPOINTS[(racer.wp + 1) % WAYPOINTS.length];
   const target = WAYPOINTS[racer.wp % WAYPOINTS.length];
   // Blend current + next while preserving separate racing lanes.
@@ -1678,10 +1730,12 @@ function updateAI(racer, dt) {
   const frac = (((progressAlongTrack(d.x, d.z) / LOOP_LEN) % 1) + 1) % 1;
   const { p, side } = frameAt(frac);
   const lat = (d.x - p.x) * side.x + (d.z - p.z) * side.z;
-  tx += side.x * (racer.aiLane - lat) * 0.58;
-  tz += side.z * (racer.aiLane - lat) * 0.58;
+  const lanePull = racer.passingT > 0 ? 2.6 : 0.58;
+  tx += side.x * (racer.aiLane - lat) * lanePull;
+  tz += side.z * (racer.aiLane - lat) * lanePull;
   const slipping = racer.slipT > 0;
-  steerToward(d, tx, tz, d.steer * (slipping ? 0.22 : 1.15), dt);
+  const steeringRate = slipping ? 0.22 : racer.passingT > 0 ? 2.1 : 1.15;
+  steerToward(d, tx, tz, d.steer * steeringRate, dt);
   if (slipping) {
     d.yaw += Math.sin(performance.now() * 0.011 + racer.slipPhase) * 1.05 * dt;
     racer.slipAngle = THREE.MathUtils.clamp(
@@ -1721,9 +1775,12 @@ function updateAI(racer, dt) {
   let want = vmax * racer.aiPace * paceWave
     * (cornering > 0.6 ? 0.8 : cornering > 0.3 ? 0.93 : 1);
   if (slipping) want *= 0.68;
-  // Match the car ahead instead of driving through it.
+  // Match the nearest car ahead, then find a clear lane to pass it.
+  let nearestBlocker = null;
+  let nearestAhead = Infinity;
   for (const other of racers) {
     if (other === racer) continue;
+    if (other === racer.avoidCar && racer.passingT > 0) continue;
     const dx = other.drive.x - d.x;
     const dz = other.drive.z - d.z;
     const ahead = dx * Math.sin(d.yaw) + dz * Math.cos(d.yaw);
@@ -1732,13 +1789,46 @@ function updateAI(racer, dt) {
     if (ahead > 0 && ahead < safeGap && across < d.halfW + other.drive.halfW + 0.4) {
       const gapFactor = THREE.MathUtils.clamp(ahead / safeGap, 0.25, 0.92);
       want = Math.min(want, other.drive.speed * gapFactor);
-      if (racer.laneChangeCooldown <= 0 && ahead > d.halfL + other.drive.halfL + 1) {
-        const direction = racer.aiLane <= 0 ? 1 : -1;
-        racer.aiLane = direction * (1.05 + Math.random() * 0.45);
-        racer.laneChangeCooldown = 2.8 + Math.random() * 1.8;
+      if (ahead < nearestAhead) {
+        nearestAhead = ahead;
+        nearestBlocker = other;
       }
     }
   }
+
+  if (nearestBlocker) {
+    const passingLane = chooseAiPassingLane(racer, p, side);
+    const stoppedBlocker = Math.abs(nearestBlocker.drive.speed) < 1.5;
+    const boxedDistance = d.halfL + nearestBlocker.drive.halfL + 1.15;
+    if (passingLane !== null && (racer.laneChangeCooldown <= 0 || stoppedBlocker)) {
+      racer.avoidDirection = Math.sign(passingLane - lat) || racer.avoidDirection;
+      racer.aiLane = passingLane;
+      racer.laneChangeCooldown = 1.8 + Math.random() * 0.8;
+      if (nearestAhead >= boxedDistance || d.speed >= 3) {
+        racer.avoidCar = nearestBlocker;
+        racer.passingT = 1.8;
+      }
+    }
+
+    if (nearestAhead < boxedDistance && d.speed < 3) {
+      racer.blockedT += dt;
+      if (racer.blockedT > 0.38) {
+        racer.reverseT = 0.8;
+        racer.avoidCar = nearestBlocker;
+        if (passingLane === null) {
+          racer.avoidDirection = lat <= 0 ? 1 : -1;
+          racer.aiLane = racer.avoidDirection * 2.65;
+        }
+        updateAiReverse(racer, dt);
+        return;
+      }
+    } else {
+      racer.blockedT = Math.max(0, racer.blockedT - dt * 2);
+    }
+  } else {
+    racer.blockedT = Math.max(0, racer.blockedT - dt * 2);
+  }
+
   const accelerating = d.speed < want - 0.35;
   if (accelerating) d.speed += d.accel * (racer.boostT > 0 ? 1.28 : racer.onPad ? 1.15 : 0.94) * dt;
   else d.speed -= d.brake * 0.35 * dt;
@@ -1747,6 +1837,11 @@ function updateAI(racer, dt) {
   const moveYaw = d.yaw + racer.slipAngle;
   d.x += Math.sin(moveYaw) * d.speed * dt;
   d.z += Math.cos(moveYaw) * d.speed * dt;
+  if (racer.passingT > 0) {
+    const lateralStep = THREE.MathUtils.clamp(racer.aiLane - lat, -1, 1) * 2.8 * dt;
+    d.x += side.x * lateralStep;
+    d.z += side.z * lateralStep;
+  }
   resolveCollisions(racer);
   applyPose(racer, THREE.MathUtils.clamp(
     Math.atan2(Math.sin(Math.atan2(tx - d.x, tz - d.z) - d.yaw), Math.cos(Math.atan2(tx - d.x, tz - d.z) - d.yaw)) * 2,
