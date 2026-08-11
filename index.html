@@ -1,0 +1,1178 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Desert Loop</title>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.180.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.180.0/examples/jsm/"
+    }
+  }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --ink: #1a1f26;
+      --cream: #f3ecdc;
+      --sand: #e8dcc4;
+      --panel: rgba(243, 236, 220, 0.92);
+      --accent: #c45a2c;
+      --asphalt: #3d3f46;
+      --meadow: #6f8a4b;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background: var(--cream);
+      font-family: "DM Sans", sans-serif;
+      color: var(--ink);
+    }
+    canvas { display: block; }
+
+    /* —— Intro —— */
+    #intro {
+      position: fixed;
+      inset: 0;
+      z-index: 10;
+      display: grid;
+      grid-template-rows: 1fr auto;
+      overflow: hidden;
+      background: transparent;
+      transition: opacity 0.45s ease, visibility 0.45s;
+    }
+    #intro.hidden {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+    .intro-veil {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background:
+        linear-gradient(105deg, rgba(243, 236, 220, 0.82) 0%, rgba(243, 236, 220, 0.35) 34%, rgba(243, 236, 220, 0.05) 58%, transparent 72%),
+        linear-gradient(0deg, rgba(26, 31, 38, 0.5) 0%, transparent 38%),
+        radial-gradient(ellipse 45% 35% at 78% 28%, rgba(196, 90, 44, 0.16), transparent 65%);
+    }
+
+    /* Parallax prop stage */
+    .parallax {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      overflow: hidden;
+    }
+    .plx-layer {
+      position: absolute;
+      inset: -6%;
+      will-change: transform;
+      transition: transform 0.15s ease-out;
+    }
+    .plx-item {
+      position: absolute;
+      object-fit: contain;
+      filter: drop-shadow(0 18px 28px rgba(26, 31, 38, 0.22));
+      opacity: 1;
+      mix-blend-mode: multiply;
+      animation: floatY 7s ease-in-out infinite;
+    }
+    .plx-item.far { opacity: 0.75; filter: blur(0.3px) drop-shadow(0 10px 18px rgba(26, 31, 38, 0.12)); }
+    .plx-item.near { opacity: 1; mix-blend-mode: multiply; }
+
+    .intro-layout {
+      position: relative;
+      z-index: 2;
+      display: grid;
+      grid-template-columns: minmax(280px, 1.05fr) minmax(280px, 0.95fr);
+      grid-template-rows: 1fr auto;
+      gap: clamp(16px, 2.5vw, 36px);
+      padding: clamp(22px, 4vh, 48px) clamp(22px, 4vw, 56px) clamp(18px, 3vh, 28px);
+      height: 100%;
+      align-content: space-between;
+    }
+
+    .intro-hero {
+      grid-column: 1;
+      grid-row: 1;
+      align-self: end;
+      max-width: 34rem;
+      animation: rise 0.75s ease both;
+    }
+    .eyebrow {
+      margin: 0 0 10px;
+      font-size: 12px;
+      letter-spacing: 0.28em;
+      text-transform: uppercase;
+      opacity: 0.55;
+      font-weight: 600;
+    }
+    .brand {
+      font-family: "Bebas Neue", sans-serif;
+      font-size: clamp(64px, 11vw, 120px);
+      letter-spacing: 0.04em;
+      line-height: 0.86;
+      margin: 0;
+      text-shadow: 0 12px 40px rgba(243, 236, 220, 0.65);
+    }
+    .brand span { color: var(--accent); }
+    .tagline {
+      margin: 14px 0 0;
+      max-width: 38ch;
+      font-size: clamp(14px, 1.35vw, 17px);
+      line-height: 1.5;
+      opacity: 0.78;
+    }
+
+    .intro-feature {
+      grid-column: 2;
+      grid-row: 1;
+      align-self: center;
+      justify-self: end;
+      width: min(100%, 460px);
+      display: grid;
+      justify-items: center;
+      gap: 10px;
+      animation: rise 0.75s ease 0.1s both;
+      transform-style: preserve-3d;
+    }
+    .feature-stage {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 4 / 3;
+      display: grid;
+      place-items: center;
+    }
+    .feature-stage::before {
+      content: "";
+      position: absolute;
+      width: 78%;
+      height: 28%;
+      bottom: 12%;
+      border-radius: 50%;
+      background: radial-gradient(ellipse, rgba(26, 31, 38, 0.28), transparent 70%);
+      filter: blur(8px);
+    }
+    #featureCar {
+      position: relative;
+      width: 92%;
+      height: 82%;
+      object-fit: contain;
+      transition: opacity 0.25s ease, transform 0.45s cubic-bezier(0.2, 0.8, 0.2, 1);
+      filter: drop-shadow(0 22px 30px rgba(26, 31, 38, 0.28));
+      --fx: 0px;
+      --fy: 0px;
+      animation: featureBob 5.5s ease-in-out infinite;
+    }
+    .feature-meta {
+      text-align: center;
+      min-height: 4.5rem;
+    }
+    .feature-meta h2 {
+      font-family: "Bebas Neue", sans-serif;
+      font-size: clamp(28px, 3.5vw, 40px);
+      letter-spacing: 0.05em;
+      margin: 0;
+      transition: opacity 0.2s;
+    }
+    .feature-meta p {
+      margin: 2px 0 0;
+      font-size: 14px;
+      opacity: 0.65;
+    }
+    .feature-stats {
+      display: flex;
+      justify-content: center;
+      gap: 14px;
+      margin-top: 8px;
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      opacity: 0.8;
+    }
+    .feature-stats strong {
+      color: var(--accent);
+      font-family: "Bebas Neue", sans-serif;
+      font-size: 18px;
+      letter-spacing: 0.04em;
+      margin-right: 4px;
+    }
+
+    .intro-dock {
+      grid-column: 1 / -1;
+      grid-row: 2;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: clamp(14px, 2vw, 24px);
+      align-items: end;
+      padding: 16px 18px;
+      border-radius: 18px;
+      background: rgba(243, 236, 220, 0.78);
+      border: 1px solid rgba(255, 255, 255, 0.55);
+      backdrop-filter: blur(14px);
+      box-shadow: 0 18px 50px rgba(26, 31, 38, 0.14);
+      animation: rise 0.75s ease 0.18s both;
+    }
+    .garage {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      width: 100%;
+    }
+    @media (max-width: 900px) {
+      .intro-layout {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto 1fr auto;
+      }
+      .intro-hero { grid-column: 1; grid-row: 1; align-self: start; }
+      .intro-feature { grid-column: 1; grid-row: 2; justify-self: center; width: min(100%, 360px); }
+      .intro-dock { grid-template-columns: 1fr; }
+      .garage { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    }
+    @media (max-width: 640px) {
+      .garage { grid-template-columns: repeat(2, 1fr); }
+      .brand { font-size: clamp(56px, 16vw, 84px); }
+    }
+
+    .car-card {
+      appearance: none;
+      border: 1.5px solid transparent;
+      background: rgba(255, 255, 255, 0.35);
+      border-radius: 12px;
+      padding: 8px;
+      cursor: pointer;
+      text-align: left;
+      color: inherit;
+      font: inherit;
+      transition:
+        border-color 0.22s ease,
+        transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1),
+        background 0.22s ease,
+        box-shadow 0.28s ease;
+    }
+    .car-card:hover {
+      transform: translateY(-6px) scale(1.02);
+      background: rgba(255, 255, 255, 0.62);
+      box-shadow: 0 14px 28px rgba(26, 31, 38, 0.12);
+    }
+    .car-card:hover img { transform: scale(1.08) translateY(-2px); }
+    .car-card.selected {
+      border-color: var(--accent);
+      background: rgba(255, 255, 255, 0.82);
+      box-shadow: 0 12px 30px rgba(196, 90, 44, 0.2);
+    }
+    .car-card .thumb {
+      display: grid;
+      place-items: center;
+      width: 100%;
+      aspect-ratio: 16 / 10;
+      border-radius: 8px;
+      background:
+        radial-gradient(ellipse at 50% 80%, rgba(255,255,255,0.55), transparent 60%),
+        linear-gradient(160deg, #d9d0bc, #c3b79f);
+      overflow: hidden;
+    }
+    .car-card img {
+      display: block;
+      width: 74%;
+      height: 80%;
+      object-fit: contain;
+      transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+    .car-card h3 {
+      font-family: "Bebas Neue", sans-serif;
+      font-size: clamp(15px, 1.5vw, 18px);
+      letter-spacing: 0.04em;
+      margin: 7px 0 1px;
+    }
+    .car-card p {
+      margin: 0;
+      font-size: 11px;
+      opacity: 0.62;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .car-card .stats {
+      display: none;
+    }
+
+    .intro-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      align-items: stretch;
+      min-width: 168px;
+    }
+    .btn {
+      appearance: none;
+      border: none;
+      cursor: pointer;
+      font-family: "Bebas Neue", sans-serif;
+      font-size: 24px;
+      letter-spacing: 0.1em;
+      padding: 16px 28px;
+      border-radius: 12px;
+      background: var(--ink);
+      color: var(--cream);
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+    }
+    .btn::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(115deg, transparent 30%, rgba(255,255,255,0.35) 48%, transparent 62%);
+      transform: translateX(-120%);
+      transition: transform 0.55s ease;
+    }
+    .btn:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 12px 28px rgba(26, 31, 38, 0.22);
+    }
+    .btn:hover::after { transform: translateX(120%); }
+    .btn.primary {
+      background: var(--accent);
+      color: #fff;
+      box-shadow: 0 10px 24px rgba(196, 90, 44, 0.28);
+    }
+    .btn.primary:hover { background: #a84820; }
+    .laps-pick {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 12px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      opacity: 0.85;
+    }
+    .laps-pick .lap-btns { display: flex; gap: 6px; }
+    .laps-pick button {
+      appearance: none;
+      border: 1px solid #cfc3ab;
+      background: rgba(255,255,255,0.45);
+      border-radius: 8px;
+      padding: 8px 12px;
+      cursor: pointer;
+      font: inherit;
+      color: inherit;
+      transition: transform 0.15s, background 0.15s, border-color 0.15s;
+    }
+    .laps-pick button:hover { transform: translateY(-1px); border-color: var(--accent); }
+    .laps-pick button.on {
+      background: var(--ink);
+      color: var(--cream);
+      border-color: var(--ink);
+    }
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(18px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes floatY {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-12px); }
+    }
+    @keyframes featureBob {
+      0%, 100% { transform: translate(var(--fx), var(--fy)) rotate(-1deg); }
+      50% { transform: translate(var(--fx), calc(var(--fy) - 10px)) rotate(1deg); }
+    }
+
+    /* —— Professional start-screen pass —— */
+    #intro {
+      --menu-pad: clamp(22px, 4vw, 58px);
+      background:
+        radial-gradient(circle at 72% 30%, rgba(196, 90, 44, 0.13), transparent 28%),
+        radial-gradient(circle at 82% 72%, rgba(111, 138, 75, 0.24), transparent 34%),
+        linear-gradient(118deg, #f4eddf 0%, #e9dfca 55%, #ced3a8 100%);
+    }
+    #intro::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      pointer-events: none;
+      background:
+        linear-gradient(90deg, rgba(26, 31, 38, 0.08) 1px, transparent 1px) 0 0 / 80px 80px,
+        linear-gradient(rgba(26, 31, 38, 0.06) 1px, transparent 1px) 0 0 / 80px 80px;
+      mask-image: linear-gradient(to bottom, transparent 18%, black 72%, transparent);
+      opacity: 0.22;
+    }
+    .intro-topbar {
+      position: absolute;
+      z-index: 5;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 66px;
+      padding: 0 var(--menu-pad);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(26, 31, 38, 0.12);
+      background: rgba(243, 236, 220, 0.34);
+      backdrop-filter: blur(10px);
+    }
+    .menu-mark {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-family: "Bebas Neue", sans-serif;
+      letter-spacing: 0.13em;
+      font-size: 19px;
+    }
+    .menu-mark-icon {
+      width: 31px;
+      aspect-ratio: 1;
+      display: grid;
+      place-items: center;
+      color: white;
+      background: var(--accent);
+      border-radius: 7px;
+      box-shadow: 0 7px 18px rgba(196, 90, 44, 0.28);
+    }
+    .menu-status {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      color: rgba(26, 31, 38, 0.58);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+    .menu-status span:first-child::before {
+      content: "";
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      margin-right: 7px;
+      border-radius: 50%;
+      background: #72a23d;
+      box-shadow: 0 0 0 4px rgba(114, 162, 61, 0.14);
+    }
+    .intro-veil {
+      z-index: 1;
+      background:
+        linear-gradient(90deg, rgba(243, 236, 220, 0.68) 0%, rgba(243, 236, 220, 0.26) 38%, transparent 72%),
+        linear-gradient(0deg, rgba(30, 35, 39, 0.2) 0%, transparent 28%);
+    }
+    .parallax { z-index: 0; }
+    .plx-layer { opacity: 0.45; }
+    #plxFar { opacity: 0.25; }
+    #plxNear { opacity: 0.5; }
+    .plx-item {
+      animation-duration: 10s;
+      filter: saturate(0.75) drop-shadow(0 16px 28px rgba(26, 31, 38, 0.13));
+    }
+    .intro-layout {
+      z-index: 3;
+      width: 100%;
+      max-width: 1720px;
+      margin-inline: auto;
+      grid-template-columns: minmax(360px, 0.9fr) minmax(400px, 1.1fr);
+      grid-template-rows: minmax(0, 1fr) auto;
+      gap: clamp(12px, 2vw, 28px);
+      padding: 82px var(--menu-pad) 24px;
+    }
+    .intro-hero {
+      align-self: center;
+      max-width: 540px;
+      padding-bottom: 24px;
+    }
+    .eyebrow {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 14px;
+      color: var(--accent);
+      opacity: 1;
+      font-weight: 700;
+    }
+    .eyebrow::before {
+      content: "";
+      width: 34px;
+      height: 2px;
+      background: currentColor;
+    }
+    .brand {
+      font-size: clamp(72px, 9vw, 128px);
+      letter-spacing: 0.025em;
+      text-transform: uppercase;
+    }
+    .tagline {
+      max-width: 43ch;
+      margin-top: 18px;
+      color: rgba(26, 31, 38, 0.7);
+    }
+    .hero-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 22px;
+    }
+    .hero-badges span {
+      padding: 7px 11px;
+      border: 1px solid rgba(26, 31, 38, 0.15);
+      border-radius: 999px;
+      background: rgba(243, 236, 220, 0.5);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.11em;
+      text-transform: uppercase;
+      backdrop-filter: blur(6px);
+    }
+    .intro-feature {
+      align-self: center;
+      justify-self: start;
+      width: min(100%, 600px);
+      height: min(52vh, 470px);
+      display: block;
+      position: relative;
+      isolation: isolate;
+    }
+    .feature-stage {
+      position: absolute;
+      inset: 0 0 80px;
+      aspect-ratio: auto;
+      overflow: visible;
+    }
+    .feature-stage::after {
+      content: "";
+      position: absolute;
+      inset: 10% 4%;
+      z-index: -2;
+      border: 1px solid rgba(26, 31, 38, 0.14);
+      border-radius: 50%;
+      transform: rotate(-9deg);
+    }
+    .feature-stage::before {
+      z-index: -1;
+      bottom: 10%;
+      background: radial-gradient(ellipse, rgba(26, 31, 38, 0.34), transparent 70%);
+    }
+    #featureCar {
+      width: 108%;
+      height: 108%;
+      object-fit: contain;
+      mix-blend-mode: normal;
+      filter: saturate(1.06) contrast(1.03) drop-shadow(0 30px 22px rgba(26, 31, 38, 0.28));
+    }
+    .feature-index {
+      position: absolute;
+      z-index: -1;
+      right: 1%;
+      top: -4%;
+      color: rgba(26, 31, 38, 0.07);
+      font-family: "Bebas Neue", sans-serif;
+      font-size: clamp(120px, 17vw, 240px);
+      line-height: 1;
+    }
+    .feature-meta {
+      position: absolute;
+      left: 7%;
+      right: auto;
+      bottom: 2%;
+      width: min(390px, 82%);
+      min-height: 68px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      grid-template-rows: auto auto;
+      column-gap: 18px;
+      align-items: end;
+      text-align: left;
+      padding: 12px 16px;
+      color: var(--cream);
+      border-left: 3px solid var(--accent);
+      background: linear-gradient(90deg, rgba(26, 31, 38, 0.94), rgba(26, 31, 38, 0.72));
+      backdrop-filter: blur(10px);
+      box-shadow: 0 14px 30px rgba(26, 31, 38, 0.18);
+      clip-path: polygon(0 0, calc(100% - 15px) 0, 100% 15px, 100% 100%, 0 100%);
+    }
+    .feature-meta h2 {
+      grid-column: 1;
+      font-size: 30px;
+      line-height: 1;
+    }
+    .feature-meta p {
+      grid-column: 1;
+      font-size: 11px;
+      color: rgba(243, 236, 220, 0.64);
+    }
+    .feature-stats {
+      grid-column: 2;
+      grid-row: 1 / 3;
+      align-self: center;
+      margin: 0;
+      gap: 18px;
+      color: rgba(243, 236, 220, 0.72);
+    }
+    .feature-stats strong { color: #f28657; font-size: 23px; }
+    .intro-dock {
+      min-height: 142px;
+      grid-template-columns: minmax(0, 1fr) 190px;
+      align-items: stretch;
+      padding: 10px;
+      border-radius: 14px;
+      background: rgba(24, 29, 34, 0.91);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow: 0 24px 60px rgba(14, 17, 21, 0.3);
+    }
+    .garage {
+      gap: 7px;
+      min-width: 0;
+    }
+    .car-card {
+      display: grid;
+      grid-template-columns: minmax(74px, 42%) 1fr;
+      grid-template-rows: 1fr auto;
+      align-items: center;
+      gap: 0 10px;
+      min-width: 0;
+      padding: 7px;
+      color: var(--cream);
+      border-radius: 9px;
+      background: rgba(255, 255, 255, 0.055);
+    }
+    .car-card:hover {
+      background: rgba(255, 255, 255, 0.11);
+      box-shadow: none;
+    }
+    .car-card.selected {
+      border-color: #f28657;
+      background: rgba(196, 90, 44, 0.2);
+      box-shadow: inset 0 0 0 1px rgba(242, 134, 87, 0.18);
+    }
+    .car-card .thumb {
+      grid-row: 1 / 3;
+      aspect-ratio: 4 / 3;
+      background: #d8d0c0;
+      display: grid;
+      place-items: center;
+    }
+    .car-card img {
+      width: 90%;
+      height: 90%;
+      padding: 2px;
+      object-fit: contain;
+      object-position: center;
+      mix-blend-mode: normal;
+      filter: drop-shadow(0 7px 6px rgba(26, 31, 38, 0.2));
+    }
+    .car-card h3 {
+      align-self: end;
+      margin: 0 0 2px;
+      font-size: clamp(14px, 1.3vw, 19px);
+    }
+    .car-card p {
+      align-self: start;
+      color: rgba(243, 236, 220, 0.52);
+      font-size: 9px;
+    }
+    .intro-actions {
+      justify-content: space-between;
+      padding: 4px;
+      min-width: 0;
+    }
+    .intro-actions::before {
+      content: "Race setup";
+      color: rgba(243, 236, 220, 0.45);
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+    }
+    .btn {
+      border-radius: 8px;
+    }
+    .btn.primary {
+      padding-block: 14px;
+      box-shadow: 0 10px 24px rgba(196, 90, 44, 0.24);
+    }
+    .laps-pick {
+      color: rgba(243, 236, 220, 0.7);
+    }
+    .laps-pick button {
+      color: var(--cream);
+      border-color: rgba(255, 255, 255, 0.15);
+      background: rgba(255, 255, 255, 0.08);
+    }
+    .laps-pick button.on {
+      color: var(--ink);
+      border-color: var(--cream);
+      background: var(--cream);
+    }
+    .menu-hint {
+      position: absolute;
+      z-index: 5;
+      right: var(--menu-pad);
+      bottom: 5px;
+      color: rgba(243, 236, 220, 0.42);
+      font-size: 9px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      pointer-events: none;
+    }
+    @media (max-width: 1050px) {
+      .intro-layout {
+        grid-template-columns: minmax(310px, 0.85fr) minmax(350px, 1.15fr);
+      }
+      .car-card {
+        grid-template-columns: 1fr;
+        grid-template-rows: 1fr auto;
+      }
+      .car-card .thumb { grid-row: 1; }
+      .car-card p { display: none; }
+      .car-card h3 { margin-top: 4px; }
+    }
+    @media (min-width: 681px) and (max-width: 900px) {
+      .intro-topbar { height: 58px; }
+      .intro-layout {
+        grid-template-columns: minmax(250px, 0.85fr) minmax(300px, 1.15fr);
+        grid-template-rows: minmax(0, 1fr) 126px;
+        gap: 12px;
+        padding: 70px 30px 16px;
+      }
+      .intro-hero {
+        grid-column: 1;
+        grid-row: 1;
+        align-self: center;
+        padding: 0;
+      }
+      .brand { font-size: clamp(62px, 10vw, 82px); }
+      .tagline { margin-top: 10px; font-size: 12px; }
+      .hero-badges { margin-top: 12px; gap: 5px; }
+      .hero-badges span { padding: 5px 8px; font-size: 8px; }
+      .intro-feature {
+        grid-column: 2;
+        grid-row: 1;
+        width: 100%;
+        height: min(48vh, 330px);
+      }
+      .feature-meta {
+        left: 4%;
+        width: 92%;
+        min-height: 58px;
+        padding: 9px 12px;
+      }
+      .feature-meta h2 { font-size: 23px; }
+      .feature-stats { gap: 8px; font-size: 8px; }
+      .feature-stats strong { font-size: 18px; }
+      .intro-dock {
+        grid-column: 1 / -1;
+        grid-row: 2;
+        grid-template-columns: minmax(0, 1fr) 154px;
+        min-height: 126px;
+      }
+      .garage { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+      .car-card { display: grid; padding: 6px; }
+      .car-card .thumb { height: 72px; aspect-ratio: auto; }
+      .car-card h3 { font-size: 13px; }
+      .intro-actions { gap: 4px; }
+      .btn.primary { padding: 10px 12px; font-size: 20px; }
+      .laps-pick button { padding: 5px 8px; }
+      .menu-hint { display: none; }
+    }
+    @media (max-width: 680px) {
+      #intro { overflow-y: auto; }
+      .intro-topbar { height: 54px; }
+      .menu-status span:last-child { display: none; }
+      .intro-layout {
+        height: auto;
+        min-height: 100%;
+        grid-template-columns: 1fr;
+        grid-template-rows: auto auto auto;
+        padding-top: 72px;
+      }
+      .intro-hero { grid-row: 1; padding: 0; }
+      .intro-feature {
+        grid-column: 1;
+        grid-row: 2;
+        width: min(100%, 440px);
+        height: 330px;
+        justify-self: center;
+      }
+      .intro-dock {
+        grid-row: 3;
+        display: flex;
+        flex-direction: column;
+        height: auto;
+        min-height: 326px;
+        gap: 16px;
+      }
+      .garage { grid-template-columns: repeat(2, 1fr); }
+      .car-card { grid-template-columns: 92px 1fr; grid-template-rows: 1fr auto; }
+      .car-card .thumb { grid-row: 1 / 3; }
+      .car-card p { display: block; }
+      .intro-actions { display: grid; grid-template-columns: 1fr 1fr; }
+      .intro-actions::before { grid-column: 1 / -1; }
+      .feature-meta { column-gap: 10px; }
+      .feature-meta h2 { font-size: 25px; }
+      .feature-stats { gap: 9px; font-size: 9px; }
+      .feature-stats strong { font-size: 19px; }
+      .menu-hint { display: none; }
+    }
+    @media (max-height: 650px) and (min-width: 761px) {
+      .intro-topbar { height: 52px; }
+      .intro-layout {
+        padding-top: 62px;
+        padding-bottom: 12px;
+        grid-template-rows: minmax(0, 1fr) 124px;
+      }
+      .brand { font-size: clamp(60px, 9vw, 92px); }
+      .intro-hero { padding-bottom: 8px; }
+      .tagline { margin-top: 10px; font-size: 13px; }
+      .hero-badges { margin-top: 12px; }
+      .intro-feature { height: min(49vh, 330px); }
+      .feature-stage { bottom: 74px; }
+      .feature-meta { min-height: 58px; }
+      .intro-dock { min-height: 124px; }
+      .car-card {
+        grid-template-columns: minmax(64px, 46%) 1fr;
+        grid-template-rows: 1fr auto;
+        min-height: 0;
+      }
+      .car-card .thumb {
+        grid-row: 1 / 3;
+        height: 100%;
+        min-height: 0;
+        aspect-ratio: auto;
+      }
+      .car-card p { display: none; }
+      .intro-actions { gap: 4px; }
+      .intro-actions::before { line-height: 1; }
+      .btn.primary { padding-block: 10px; }
+      .laps-pick button { padding: 6px 10px; }
+      .menu-hint { display: none; }
+    }
+
+    /* —— HUD —— */
+    #hud {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 2;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    #hud.on { opacity: 1; }
+    #title {
+      position: absolute;
+      top: 18px;
+      left: 22px;
+      font-family: "Bebas Neue", sans-serif;
+      font-size: 22px;
+      letter-spacing: 0.12em;
+      opacity: 0.75;
+    }
+    .panel {
+      background: var(--panel);
+      padding: 10px 14px;
+      border-radius: 10px;
+      backdrop-filter: blur(6px);
+    }
+    #lap {
+      position: absolute;
+      top: 18px;
+      right: 22px;
+      text-align: right;
+      font-size: 13px;
+    }
+    #lap .num {
+      font-family: "Bebas Neue", sans-serif;
+      font-size: 28px;
+      color: var(--accent);
+      letter-spacing: 0.04em;
+    }
+    #place {
+      position: absolute;
+      top: 18px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: "Bebas Neue", sans-serif;
+      font-size: 28px;
+      letter-spacing: 0.06em;
+      min-width: 90px;
+      text-align: center;
+    }
+    #hint {
+      position: absolute;
+      left: 22px;
+      bottom: 22px;
+      font-size: 13px;
+      line-height: 1.45;
+      max-width: 260px;
+    }
+    #hint kbd {
+      display: inline-block;
+      padding: 1px 6px;
+      border-radius: 4px;
+      background: #e7dfcc;
+      font-family: inherit;
+      font-size: 12px;
+      border: 1px solid #d5cbb3;
+    }
+    #speed {
+      position: absolute;
+      right: 22px;
+      bottom: 22px;
+      text-align: right;
+      min-width: 110px;
+    }
+    #speed .value {
+      font-family: "Bebas Neue", sans-serif;
+      font-size: 40px;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+    }
+    #speed .unit {
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      opacity: 0.65;
+    }
+    #boostHud {
+      position: absolute;
+      left: 50%;
+      bottom: 88px;
+      transform: translateX(-50%);
+      font-family: "Bebas Neue", sans-serif;
+      font-size: 26px;
+      letter-spacing: 0.12em;
+      padding: 6px 16px;
+      border-radius: 6px;
+      background: rgba(196, 90, 44, 0.92);
+      color: #fff8f0;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.15s ease;
+    }
+    #boostHud.on { opacity: 1; }
+    #boostHud.repair { background: rgba(46, 142, 80, 0.94); }
+    #boostHud.fuel { background: rgba(189, 139, 24, 0.95); }
+    #boostHud.impact { background: rgba(185, 45, 38, 0.94); }
+    #damageHud {
+      position: absolute;
+      right: 22px;
+      bottom: 114px;
+      width: 180px;
+      padding: 9px 12px;
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    #damageHud .damage-label {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 7px;
+    }
+    #damageHud .damage-track {
+      height: 7px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: rgba(20, 24, 28, 0.28);
+    }
+    #damageFill {
+      width: 0;
+      height: 100%;
+      border-radius: inherit;
+      background: #e59635;
+      transition: width 0.15s ease, background 0.2s ease;
+    }
+    #damageHud.critical #damageFill { background: #d43e32; }
+    #fuelHud {
+      position: absolute;
+      right: 22px;
+      bottom: 178px;
+      width: 180px;
+      padding: 9px 12px;
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    #fuelHud .fuel-label {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 7px;
+    }
+    #fuelHud .fuel-track {
+      height: 7px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: rgba(20, 24, 28, 0.28);
+    }
+    #fuelFill {
+      width: 100%;
+      height: 100%;
+      border-radius: inherit;
+      background: #e5ad35;
+      transition: width 0.15s ease, background 0.2s ease;
+    }
+    #fuelHud.critical #fuelFill { background: #d45432; }
+    @media (max-width: 680px) {
+      #damageHud { right: 12px; bottom: 104px; width: 145px; }
+      #fuelHud { right: 12px; bottom: 164px; width: 145px; }
+    }
+    #countdown {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      z-index: 5;
+      pointer-events: none;
+      font-family: "Bebas Neue", sans-serif;
+      font-size: clamp(80px, 18vw, 160px);
+      letter-spacing: 0.08em;
+      color: var(--ink);
+      text-shadow: 0 8px 40px rgba(243, 236, 220, 0.9);
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
+    #countdown.show { opacity: 1; }
+    #finish {
+      position: fixed;
+      inset: 0;
+      z-index: 8;
+      display: none;
+      place-items: center;
+      background: rgba(26, 31, 38, 0.45);
+      backdrop-filter: blur(4px);
+      pointer-events: auto;
+    }
+    #finish.show { display: grid; }
+    #finish .card {
+      background: var(--cream);
+      padding: 36px 40px;
+      border-radius: 16px;
+      text-align: center;
+      max-width: 420px;
+      animation: rise 0.4s ease both;
+    }
+    #finish h2 {
+      font-family: "Bebas Neue", sans-serif;
+      font-size: 48px;
+      margin: 0 0 8px;
+      letter-spacing: 0.06em;
+    }
+    #finish p { margin: 0 0 20px; opacity: 0.7; }
+    #finish .btn { pointer-events: auto; margin: 0 6px; }
+  </style>
+</head>
+<body>
+  <div id="intro">
+    <div class="intro-topbar">
+      <div class="menu-mark">
+        <span class="menu-mark-icon">DL</span>
+        <span>Desert Loop Racing</span>
+      </div>
+      <div class="menu-status">
+        <span>Circuit online</span>
+        <span>Season 01 · Day race</span>
+      </div>
+    </div>
+    <div class="parallax" aria-hidden="true">
+      <div class="plx-layer" data-depth="12" id="plxFar">
+        <img class="plx-item far" src="./assets/intro/tall-pine-tree-ab4108.png" alt="" style="left:4%; bottom:20%; width:min(22vw,200px); animation-delay:-1s">
+        <img class="plx-item far" src="./assets/intro/tall-pine-tree-ab4108.png" alt="" style="left:16%; bottom:26%; width:min(14vw,130px); animation-delay:-3s">
+        <img class="plx-item far" src="./assets/intro/rock-spire-13819c.png" alt="" style="right:6%; bottom:30%; width:min(16vw,140px); animation-delay:-2s">
+        <img class="plx-item far" src="./assets/intro/bush-8bb596.png" alt="" style="right:20%; bottom:18%; width:min(12vw,110px)">
+      </div>
+      <div class="plx-layer" data-depth="28" id="plxMid">
+        <img class="plx-item" src="./assets/intro/timber-barn-90b3ce.png" alt="" style="left:1%; bottom:10%; width:min(32vw,300px); animation-delay:-0.5s">
+        <img class="plx-item" src="./assets/intro/cove-tavern-5861a6.png" alt="" style="left:20%; bottom:6%; width:min(26vw,240px); animation-delay:-2.4s">
+        <img class="plx-item" src="./assets/intro/three-storey-shophouse-2f6378.png" alt="" style="right:2%; bottom:12%; width:min(22vw,200px); animation-delay:-1.6s">
+        <img class="plx-item" src="./assets/intro/corner-shop-db18e2.png" alt="" style="right:14%; bottom:7%; width:min(24vw,220px); animation-delay:-3.2s">
+      </div>
+      <div class="plx-layer" data-depth="48" id="plxNear">
+        <img class="plx-item near" src="./assets/intro/potted-cactus-855c1d.png" alt="" style="left:10%; bottom:3%; width:min(11vw,96px); animation-delay:-0.8s">
+        <img class="plx-item near" src="./assets/intro/checkered-flag-81784a.png" alt="" style="right:30%; bottom:4%; width:min(10vw,84px); animation-delay:-2s">
+        <img class="plx-item near" src="./assets/intro/potted-cactus-855c1d.png" alt="" style="right:5%; bottom:2%; width:min(9vw,78px); animation-delay:-4s">
+        <img class="plx-item near" src="./assets/intro/checkered-flag-81784a.png" alt="" style="left:36%; bottom:2%; width:min(9vw,76px); animation-delay:-1.2s; transform: scaleX(-1)">
+      </div>
+    </div>
+    <div class="intro-veil"></div>
+    <div class="intro-layout">
+      <header class="intro-hero">
+        <p class="eyebrow">Open Circuit · Nitro Season</p>
+        <h1 class="brand">Desert <span>Loop</span></h1>
+        <p class="tagline">Choose your machine and own the desert. Hit the boost line, master the sweepers, and race for the flag.</p>
+        <div class="hero-badges">
+          <span>8 racers</span>
+          <span>Boost + repair</span>
+          <span>1,640 m circuit</span>
+        </div>
+      </header>
+      <div class="intro-feature">
+        <div class="feature-index" id="featureIndex">03</div>
+        <div class="feature-stage">
+          <img id="featureCar" src="./assets/cutouts/muscle-car-60s-524d46.png" alt="Selected car">
+        </div>
+        <div class="feature-meta">
+          <h2 id="featureName">Muscle Car</h2>
+          <p id="featureTag">Raw horsepower</p>
+          <div class="feature-stats" id="featureStats">
+            <span><strong>137</strong> top</span>
+            <span><strong>1.6</strong> steer</span>
+          </div>
+        </div>
+      </div>
+      <div class="intro-dock">
+        <div class="garage" id="garage"></div>
+        <div class="intro-actions">
+          <button class="btn primary" id="raceBtn" type="button">Start race</button>
+          <div class="laps-pick">
+            <span>Laps</span>
+            <div class="lap-btns">
+              <button type="button" data-laps="3" class="on">3</button>
+              <button type="button" data-laps="5">5</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="menu-hint">Select car · Choose laps · Start race</div>
+  </div>
+
+  <div id="countdown"></div>
+
+  <div id="hud">
+    <div id="title">Desert Loop</div>
+    <div id="place" class="panel">1st</div>
+    <div id="lap" class="panel">Lap <span class="num" id="lapCount">1</span> / <span id="lapTotal">3</span></div>
+    <div id="hint" class="panel">
+      <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> or arrows · <kbd>Space</kbd> brake · <kbd>R</kbd> reset · <kbd>Esc</kbd> menu
+    </div>
+    <div id="speed" class="panel">
+      <div class="value" id="speedValue">0</div>
+      <div class="unit">km/h</div>
+    </div>
+    <div id="damageHud" class="panel">
+      <div class="damage-label"><span>Damage</span><strong id="damageValue">0%</strong></div>
+      <div class="damage-track"><div id="damageFill"></div></div>
+    </div>
+    <div id="fuelHud" class="panel">
+      <div class="fuel-label"><span>Fuel</span><strong id="fuelValue">100%</strong></div>
+      <div class="fuel-track"><div id="fuelFill"></div></div>
+    </div>
+    <div id="boostHud">BOOST</div>
+  </div>
+
+  <div id="finish">
+    <div class="card">
+      <h2 id="finishTitle">Finished</h2>
+      <p id="finishMsg"></p>
+      <button class="btn primary" id="againBtn" type="button">Race again</button>
+      <button class="btn" id="menuBtn" type="button">Garage</button>
+    </div>
+  </div>
+
+  <script type="module" src="./game.js"></script>
+</body>
+</html>
