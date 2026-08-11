@@ -2,7 +2,6 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { createAsset as createGuardrail } from './assets/guardrail-d3bd42.mjs';
 import { createAsset as createLamp } from './assets/street-lamp-b4fa26.mjs';
-import { createAsset as createCone } from './assets/traffic-cone-c421e4.mjs';
 import { createAsset as createPicnic } from './assets/picnic-table-4ee33a.mjs';
 import { createAsset as createPlanter } from './assets/planter-f0dab0.mjs';
 import { createAsset as createFlag } from './assets/checkered-flag-81784a.mjs';
@@ -510,8 +509,6 @@ function addFinishZebra() {
   for (const s of [-1, 1]) {
     place(createFlag, p.x + side.x * gate * s + tan.x * 2.4, p.z + side.z * gate * s + tan.z * 2.4, Math.atan2(side.x * s, side.z * s));
     place(createFlag, p.x + side.x * gate * s - tan.x * 2.4, p.z + side.z * gate * s - tan.z * 2.4, Math.atan2(side.x * s, side.z * s));
-    place(createCone, p.x + side.x * (gate - 0.5) * s + tan.x * 3.2, p.z + side.z * (gate - 0.5) * s + tan.z * 3.2);
-    place(createCone, p.x + side.x * (gate - 0.5) * s - tan.x * 3.2, p.z + side.z * (gate - 0.5) * s - tan.z * 3.2);
   }
   return group;
 }
@@ -624,6 +621,54 @@ async function placeBuildings() {
 // —— Power-ups & speed boosters ——
 const powerups = [];
 const boostPads = [];
+const oilSlicks = [];
+
+function makeOilSlickMesh(seed) {
+  const group = new THREE.Group();
+  const materials = [
+    new THREE.MeshBasicMaterial({
+      color: 0x151513,
+      transparent: true,
+      opacity: 0.82,
+      depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -2,
+    }),
+    new THREE.MeshBasicMaterial({
+      color: 0x39352e,
+      transparent: true,
+      opacity: 0.62,
+      depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -3,
+    }),
+  ];
+  const patches = [
+    { x: 0, z: 0, rx: 1.35, rz: 0.78, material: 0 },
+    { x: -0.85, z: 0.18, rx: 0.68, rz: 0.48, material: 0 },
+    { x: 0.92, z: -0.12, rx: 0.58, rz: 0.42, material: 0 },
+    { x: 0.1, z: -0.05, rx: 0.72, rz: 0.35, material: 1 },
+  ];
+  patches.forEach((patch, patchIndex) => {
+    const shape = new THREE.Shape();
+    const points = 9;
+    for (let i = 0; i < points; i++) {
+      const angle = (i / points) * Math.PI * 2;
+      const irregularity = 0.82 + 0.18 * Math.sin(seed * 2.7 + patchIndex * 1.9 + i * 3.1);
+      const x = Math.cos(angle) * patch.rx * irregularity;
+      const y = Math.sin(angle) * patch.rz * irregularity;
+      if (i === 0) shape.moveTo(x, y);
+      else shape.lineTo(x, y);
+    }
+    shape.closePath();
+    const geometry = new THREE.ShapeGeometry(shape);
+    geometry.rotateX(-Math.PI / 2);
+    const mesh = new THREE.Mesh(geometry, materials[patch.material]);
+    mesh.position.set(patch.x, patchIndex * 0.002, patch.z);
+    group.add(mesh);
+  });
+  return group;
+}
 
 function makeBoostPadMesh() {
   const g = new THREE.Group();
@@ -699,6 +744,29 @@ function placePowerups() {
   });
 }
 
+function placeOilSlicks() {
+  const spots = [
+    { t: 0.085, lane: -1.7 },
+    { t: 0.175, lane: 2.1 },
+    { t: 0.305, lane: 0 },
+    { t: 0.43, lane: -2.15 },
+    { t: 0.55, lane: 1.8 },
+    { t: 0.685, lane: -0.4 },
+    { t: 0.805, lane: 2.05 },
+    { t: 0.9, lane: -1.9 },
+    { t: 0.975, lane: 0.55 },
+  ];
+  spots.forEach(({ t, lane }, index) => {
+    const { p, tan, side } = frameAt(t);
+    const mesh = makeOilSlickMesh(index + 1);
+    mesh.position.copy(p).addScaledVector(side, lane);
+    mesh.position.y = 0.085;
+    mesh.rotation.y = Math.atan2(tan.x, tan.z) + (index % 2 === 0 ? 0.2 : -0.18);
+    scene.add(mesh);
+    oilSlicks.push({ t, lane, mesh });
+  });
+}
+
 function placeTrackProps() {
   const railEvery = 3.9;
   const railCount = Math.floor(LOOP_LEN / railEvery);
@@ -733,12 +801,6 @@ function placeTrackProps() {
     place(createPlanter, ox + 1.6, oz + 0.8);
     place(createPlanter, ox - 1.4, oz - 0.6);
   }
-
-  for (const t of [0.30, 0.32, 0.34, 0.36]) {
-    const { p, side } = frameAt(t);
-    place(createCone, p.x + side.x * 3.2, p.z + side.z * 3.2);
-    place(createCone, p.x - side.x * 3.2, p.z - side.z * 3.2);
-  }
 }
 
 const roadMesh = createRoadMesh();
@@ -749,6 +811,7 @@ scene.add(addFinishZebra());
 placeTrackProps();
 placeScenery();
 placePowerups();
+placeOilSlicks();
 
 // Debug helpers for screenshots / tuning
 window.__desertLoop = {
@@ -841,6 +904,7 @@ window.__desertLoop.getRaceState = () => ({
     wrecked: r.wrecked,
     speed: r.drive.speed,
     maxSpeed: r.drive.maxSpeed,
+    slipT: r.slipT,
     x: r.drive.x,
     z: r.drive.z,
     yaw: r.drive.yaw,
@@ -1154,6 +1218,10 @@ async function spawnField(playerId) {
       wrecked: false,
       hitCooldown: 0,
       padCooldown: 0,
+      oilCooldown: 0,
+      slipT: 0,
+      slipAngle: 0,
+      slipPhase: Math.random() * Math.PI * 2,
       boostT: 0,
       onPad: false,
       pickupMessage: '',
@@ -1204,6 +1272,8 @@ function applyDamage(racer, amount) {
     racer.drive.speed = 0;
     racer.boostT = 0;
     racer.onPad = false;
+    racer.slipT = 0;
+    racer.slipAngle = 0;
     if (racer.isPlayer) showLoss('Your car reached 100% damage and is totaled.');
   }
 }
@@ -1365,6 +1435,8 @@ function updatePowerups(dt) {
   for (const racer of racers) {
     racer.hitCooldown = Math.max(0, racer.hitCooldown - dt);
     racer.padCooldown = Math.max(0, racer.padCooldown - dt);
+    racer.oilCooldown = Math.max(0, racer.oilCooldown - dt);
+    racer.slipT = Math.max(0, racer.slipT - dt);
     racer.pickupMessageT = Math.max(0, racer.pickupMessageT - dt);
     if (racer.boostT > 0) racer.boostT = Math.max(0, racer.boostT - dt);
     racer.onPad = false;
@@ -1373,6 +1445,24 @@ function updatePowerups(dt) {
     const frac = (((progressAlongTrack(d.x, d.z) / LOOP_LEN) % 1) + 1) % 1;
     const { p, side } = frameAt(frac);
     const lat = (d.x - p.x) * side.x + (d.z - p.z) * side.z;
+
+    if (racer.oilCooldown <= 0) {
+      for (const slick of oilSlicks) {
+        let dtTrack = Math.abs(frac - slick.t);
+        if (dtTrack > 0.5) dtTrack = 1 - dtTrack;
+        if (dtTrack < 0.0035 && Math.abs(lat - slick.lane) < 1.35) {
+          racer.slipT = 1.3;
+          racer.oilCooldown = 4;
+          racer.slipAngle = (Math.random() < 0.5 ? -1 : 1) * (0.32 + Math.random() * 0.22);
+          racer.slipPhase = Math.random() * Math.PI * 2;
+          if (racer.isPlayer) {
+            racer.pickupMessage = 'OIL SLICK';
+            racer.pickupMessageT = 0.8;
+          }
+          break;
+        }
+      }
+    }
 
     for (const pad of boostPads) {
       let dtTrack = Math.abs(frac - pad.t);
@@ -1430,7 +1520,11 @@ function updatePowerups(dt) {
     boostHudEl.classList.toggle('repair', Boolean(player?.pickupMessage.startsWith('REPAIR') || player?.pickupMessage === 'FULL HEALTH'));
     boostHudEl.classList.toggle('fuel', Boolean(player?.pickupMessage.startsWith('FUEL') || player?.pickupMessage === 'TANK FULL'));
     boostHudEl.classList.toggle('impact', Boolean(player?.pickupMessage.startsWith('IMPACT')));
-    if (player && player.pickupMessageT > 0) {
+    boostHudEl.classList.toggle('oil', Boolean(player?.slipT > 0));
+    if (player && player.slipT > 0) {
+      boostHudEl.classList.add('on');
+      boostHudEl.textContent = `OIL SLIP ${player.slipT.toFixed(1)}s`;
+    } else if (player && player.pickupMessageT > 0) {
       boostHudEl.classList.add('on');
       boostHudEl.textContent = player.pickupMessage;
     } else if (player && (player.boostT > 0 || player.onPad)) {
@@ -1536,12 +1630,24 @@ function updatePlayer(dt) {
   const speedRatio = THREE.MathUtils.clamp(Math.abs(d.speed) / Math.max(1, vmax), 0, 1);
   const sf = THREE.MathUtils.clamp(Math.abs(d.speed) / 8, 0.12, 1)
     * THREE.MathUtils.lerp(1, 0.5, speedRatio);
+  const slipping = racer.slipT > 0;
   if (Math.abs(d.speed) > 0.4) {
-    d.yaw += steerInput * d.steer * sf * Math.sign(d.speed || 1) * dt;
+    d.yaw += steerInput * d.steer * sf * (slipping ? 0.2 : 1) * Math.sign(d.speed || 1) * dt;
+    if (slipping) {
+      const wobble = Math.sin(performance.now() * 0.012 + racer.slipPhase);
+      d.yaw += wobble * (0.75 + speedRatio * 0.65) * dt;
+      racer.slipAngle = THREE.MathUtils.clamp(
+        racer.slipAngle + Math.cos(performance.now() * 0.009 + racer.slipPhase) * 0.42 * dt,
+        -0.72,
+        0.72
+      );
+    }
   }
 
-  d.x += Math.sin(d.yaw) * d.speed * dt;
-  d.z += Math.cos(d.yaw) * d.speed * dt;
+  if (!slipping) racer.slipAngle *= Math.exp(-4 * dt);
+  const moveYaw = d.yaw + racer.slipAngle;
+  d.x += Math.sin(moveYaw) * d.speed * dt;
+  d.z += Math.cos(moveYaw) * d.speed * dt;
   resolveCollisions(racer);
   applyPose(racer, steerInput);
   updateVehicleEffects(racer, dt, accelerating, braking || reversePressed);
@@ -1574,7 +1680,18 @@ function updateAI(racer, dt) {
   const lat = (d.x - p.x) * side.x + (d.z - p.z) * side.z;
   tx += side.x * (racer.aiLane - lat) * 0.58;
   tz += side.z * (racer.aiLane - lat) * 0.58;
-  steerToward(d, tx, tz, d.steer * 1.15, dt);
+  const slipping = racer.slipT > 0;
+  steerToward(d, tx, tz, d.steer * (slipping ? 0.22 : 1.15), dt);
+  if (slipping) {
+    d.yaw += Math.sin(performance.now() * 0.011 + racer.slipPhase) * 1.05 * dt;
+    racer.slipAngle = THREE.MathUtils.clamp(
+      racer.slipAngle + Math.cos(performance.now() * 0.008 + racer.slipPhase) * 0.38 * dt,
+      -0.68,
+      0.68
+    );
+  } else {
+    racer.slipAngle *= Math.exp(-4 * dt);
+  }
 
   const cornering = Math.abs(Math.atan2(
     Math.sin(Math.atan2(tx - d.x, tz - d.z) - d.yaw),
@@ -1603,6 +1720,7 @@ function updateAI(racer, dt) {
   );
   let want = vmax * racer.aiPace * paceWave
     * (cornering > 0.6 ? 0.8 : cornering > 0.3 ? 0.93 : 1);
+  if (slipping) want *= 0.68;
   // Match the car ahead instead of driving through it.
   for (const other of racers) {
     if (other === racer) continue;
@@ -1626,8 +1744,9 @@ function updateAI(racer, dt) {
   else d.speed -= d.brake * 0.35 * dt;
   d.speed = THREE.MathUtils.clamp(d.speed, 0, vmax);
 
-  d.x += Math.sin(d.yaw) * d.speed * dt;
-  d.z += Math.cos(d.yaw) * d.speed * dt;
+  const moveYaw = d.yaw + racer.slipAngle;
+  d.x += Math.sin(moveYaw) * d.speed * dt;
+  d.z += Math.cos(moveYaw) * d.speed * dt;
   resolveCollisions(racer);
   applyPose(racer, THREE.MathUtils.clamp(
     Math.atan2(Math.sin(Math.atan2(tx - d.x, tz - d.z) - d.yaw), Math.cos(Math.atan2(tx - d.x, tz - d.z) - d.yaw)) * 2,
@@ -1710,6 +1829,9 @@ function resetPlayer() {
   player.wrecked = false;
   player.hitCooldown = 0;
   player.boostT = 0;
+  player.slipT = 0;
+  player.slipAngle = 0;
+  player.oilCooldown = 0;
   player.pickupMessageT = 0;
   for (const light of player.brakeLights) light.visible = false;
   for (const particle of player.exhaust) {
