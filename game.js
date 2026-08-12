@@ -84,7 +84,15 @@ const countdownEl = document.getElementById('countdown');
 const finishEl = document.getElementById('finish');
 const finishTitle = document.getElementById('finishTitle');
 const finishMsg = document.getElementById('finishMsg');
-const speedEl = document.getElementById('speedValue');
+const speedoEl = document.getElementById('speedo');
+const speedNeedleEl = document.getElementById('speedNeedle');
+const speedProgressEl = document.getElementById('speedProgress');
+const speedTrackEl = document.getElementById('speedTrack');
+const speedRedzoneEl = document.getElementById('speedRedzone');
+const speedTicksEl = document.getElementById('speedTicks');
+const SPEEDO_MAX_KMH = 200;
+const SPEEDO_START_DEG = -120;
+const SPEEDO_SWEEP_DEG = 240;
 const lapCountEl = document.getElementById('lapCount');
 const lapTotalEl = document.getElementById('lapTotal');
 const placeEl = document.getElementById('place');
@@ -99,6 +107,7 @@ const fuelFillEl = document.getElementById('fuelFill');
 let selectedId = VEHICLES[2].id; // muscle as default pick
 let totalLaps = TOTAL_LAPS_DEFAULT;
 let mode = 'menu'; // menu | countdown | race | finish
+let lossOrbitStart = null;
 
 garageEl.innerHTML = VEHICLES.map((v) => `
   <button type="button" class="car-card${v.id === selectedId ? ' selected' : ''}" data-id="${v.id}">
@@ -130,6 +139,58 @@ function syncFeature(id) {
   }, 140);
 }
 syncFeature(selectedId);
+
+function speedoPoint(radius, ratio) {
+  const deg = SPEEDO_START_DEG + ratio * SPEEDO_SWEEP_DEG;
+  const rad = (deg - 90) * Math.PI / 180;
+  return {
+    x: 100 + Math.cos(rad) * radius,
+    y: 100 + Math.sin(rad) * radius,
+    deg,
+  };
+}
+
+function speedoArcPath(radius, fromRatio, toRatio) {
+  const start = speedoPoint(radius, fromRatio);
+  const end = speedoPoint(radius, toRatio);
+  const sweep = (toRatio - fromRatio) * SPEEDO_SWEEP_DEG;
+  const largeArc = sweep > 180 ? 1 : 0;
+  return `M ${start.x.toFixed(2)} ${start.y.toFixed(2)} A ${radius} ${radius} 0 ${largeArc} 1 ${end.x.toFixed(2)} ${end.y.toFixed(2)}`;
+}
+
+function buildSpeedometer() {
+  if (!speedTicksEl) return;
+  const marks = [];
+  for (let kmh = 0; kmh <= SPEEDO_MAX_KMH; kmh += 10) {
+    const t = kmh / SPEEDO_MAX_KMH;
+    const major = kmh % 40 === 0;
+    const outer = speedoPoint(72, t);
+    const inner = speedoPoint(major ? 58 : 64, t);
+    marks.push(
+      `<line class="tick${major ? ' major' : ''}" x1="${inner.x.toFixed(1)}" y1="${inner.y.toFixed(1)}" x2="${outer.x.toFixed(1)}" y2="${outer.y.toFixed(1)}" />`
+    );
+    if (major) {
+      const label = speedoPoint(46, t);
+      marks.push(`<text class="label" x="${label.x.toFixed(1)}" y="${label.y.toFixed(1)}">${kmh}</text>`);
+    }
+  }
+  speedTicksEl.innerHTML = marks.join('');
+  if (speedTrackEl) speedTrackEl.setAttribute('d', speedoArcPath(72, 0, 1));
+  if (speedRedzoneEl) speedRedzoneEl.setAttribute('d', speedoArcPath(72, 0.8, 1));
+  updateSpeedometer(0, false);
+}
+
+function updateSpeedometer(speedMs, boosting = false) {
+  const kmh = Math.round(Math.abs(speedMs) * 3.6);
+  if (speedoEl) speedoEl.classList.toggle('boost', Boolean(boosting));
+  const ratio = THREE.MathUtils.clamp(kmh / SPEEDO_MAX_KMH, 0, 1);
+  const angle = SPEEDO_START_DEG + ratio * SPEEDO_SWEEP_DEG;
+  if (speedNeedleEl) speedNeedleEl.setAttribute('transform', `rotate(${angle.toFixed(2)} 100 100)`);
+  if (speedProgressEl) {
+    speedProgressEl.setAttribute('d', ratio <= 0.001 ? '' : speedoArcPath(72, 0, ratio));
+  }
+}
+buildSpeedometer();
 
 garageEl.addEventListener('click', (e) => {
   const card = e.target.closest('.car-card');
@@ -955,7 +1016,12 @@ function bindRig(root) {
   };
 }
 
-const smokeGeometry = new THREE.DodecahedronGeometry(0.36, 0);
+const smokeGeometry = new THREE.IcosahedronGeometry(0.42, 0);
+const smokeGeometries = [
+  smokeGeometry,
+  new THREE.DodecahedronGeometry(0.38, 0),
+  new THREE.OctahedronGeometry(0.4, 0),
+];
 const BRAKE_LIGHT_PROFILES = {
   'camper-van-8d10e2': [
     { x: -0.335, y: 0.35, w: 0.048, h: 0.095, round: true },
@@ -1030,70 +1096,676 @@ function addVehicleEffects(racer) {
   });
   racer.smokeTimer = 0;
   racer.smokeIndex = 0;
-  racer.exhaust = racer.isPlayer
-    ? Array.from({ length: 36 }, () => {
-      const material = new THREE.MeshLambertMaterial({
-        color: 0xa8aaa5,
+  const poolSize = racer.isPlayer ? 42 : 18;
+  racer.exhaust = Array.from({ length: poolSize }, (_, index) => {
+    const material = new THREE.MeshLambertMaterial({
+      color: 0x6f716c,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      flatShading: true,
+    });
+    const mesh = new THREE.Mesh(smokeGeometries[index % smokeGeometries.length], material);
+    mesh.visible = false;
+    mesh.renderOrder = 2;
+    scene.add(mesh);
+    return {
+      mesh,
+      life: 0,
+      maxLife: 1.2,
+      baseOpacity: 0.45,
+      startScale: 0.55,
+      velocity: new THREE.Vector3(),
+      angular: new THREE.Vector3(),
+      startColor: new THREE.Color(),
+      endColor: new THREE.Color(),
+    };
+  });
+  captureDamageLook(racer);
+}
+
+const _sparkOrigin = new THREE.Vector3();
+const _sparkJitter = new THREE.Vector3();
+const sparkGeometry = new THREE.SphereGeometry(0.055, 4, 4);
+
+const DAMAGE_SCUFF = new THREE.Color(0x272220);
+const DAMAGE_LENS = new THREE.Color(0x0a0908);
+const _dmgVertex = new THREE.Vector3();
+const _dmgColor = new THREE.Color();
+
+function damageNoise(x, y, z) {
+  const s = Math.sin(x * 127.1 + y * 311.7 + z * 74.7) * 43758.5453;
+  return (s - Math.floor(s)) * 2 - 1;
+}
+
+/** Panel zones in car-local space: ellipsoid of influence + crush direction. */
+function buildDamageZoneDefs(bounds) {
+  const size = bounds.getSize(new THREE.Vector3());
+  const c = bounds.getCenter(new THREE.Vector3());
+  const v = (x, y, z) => new THREE.Vector3(x, y, z);
+  const defs = {
+    frontBumper: {
+      center: v(c.x, bounds.min.y + size.y * 0.26, bounds.max.z),
+      radii: v(size.x * 0.62, size.y * 0.26, size.z * 0.15),
+      dir: v(0, 0, -1),
+      depth: size.z * 0.11,
+    },
+    hood: {
+      center: v(c.x, bounds.min.y + size.y * 0.66, c.z + size.z * 0.28),
+      radii: v(size.x * 0.5, size.y * 0.28, size.z * 0.2),
+      dir: v(0, -1, -0.3),
+      depth: size.y * 0.12,
+    },
+    trunk: {
+      center: v(c.x, bounds.min.y + size.y * 0.66, c.z - size.z * 0.3),
+      radii: v(size.x * 0.48, size.y * 0.26, size.z * 0.18),
+      dir: v(0, -1, 0.25),
+      depth: size.y * 0.14,
+    },
+    rearBumper: {
+      center: v(c.x, bounds.min.y + size.y * 0.26, bounds.min.z),
+      radii: v(size.x * 0.6, size.y * 0.26, size.z * 0.13),
+      dir: v(0, 0, 1),
+      depth: size.z * 0.09,
+    },
+    leftDoor: {
+      center: v(bounds.min.x, bounds.min.y + size.y * 0.44, c.z + size.z * 0.02),
+      radii: v(size.x * 0.32, size.y * 0.28, size.z * 0.26),
+      dir: v(1, 0, 0),
+      depth: size.x * 0.14,
+    },
+    rightDoor: {
+      center: v(bounds.max.x, bounds.min.y + size.y * 0.44, c.z + size.z * 0.02),
+      radii: v(size.x * 0.32, size.y * 0.28, size.z * 0.26),
+      dir: v(-1, 0, 0),
+      depth: size.x * 0.14,
+    },
+    frontLeftLight: {
+      center: v(c.x - size.x * 0.3, bounds.min.y + size.y * 0.45, bounds.max.z),
+      radii: v(size.x * 0.2, size.y * 0.15, size.z * 0.09),
+      dir: v(0, 0, -1),
+      depth: size.z * 0.07,
+      lens: true,
+    },
+    frontRightLight: {
+      center: v(c.x + size.x * 0.3, bounds.min.y + size.y * 0.45, bounds.max.z),
+      radii: v(size.x * 0.2, size.y * 0.15, size.z * 0.09),
+      dir: v(0, 0, -1),
+      depth: size.z * 0.07,
+      lens: true,
+    },
+    rearLeftLight: {
+      center: v(c.x - size.x * 0.32, bounds.min.y + size.y * 0.5, bounds.min.z),
+      radii: v(size.x * 0.18, size.y * 0.14, size.z * 0.08),
+      dir: v(0, 0, 1),
+      depth: size.z * 0.06,
+      lens: true,
+    },
+    rearRightLight: {
+      center: v(c.x + size.x * 0.32, bounds.min.y + size.y * 0.5, bounds.min.z),
+      radii: v(size.x * 0.18, size.y * 0.14, size.z * 0.08),
+      dir: v(0, 0, 1),
+      depth: size.z * 0.06,
+      lens: true,
+    },
+  };
+  for (const def of Object.values(defs)) {
+    def.dir.normalize();
+    // Surface basis so wrinkles ripple across the panel instead of spiking out of it.
+    def.tangentA = new THREE.Vector3(0, 1, 0).cross(def.dir);
+    if (def.tangentA.lengthSq() < 1e-4) def.tangentA.set(1, 0, 0);
+    def.tangentA.normalize();
+    def.tangentB = new THREE.Vector3().crossVectors(def.dir, def.tangentA).normalize();
+  }
+  return defs;
+}
+
+function zoneFalloff(def, point) {
+  const dx = (point.x - def.center.x) / def.radii.x;
+  const dy = (point.y - def.center.y) / def.radii.y;
+  const dz = (point.z - def.center.z) / def.radii.z;
+  const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+  if (dist >= 1) return 0;
+  const t = 1 - dist;
+  return t * t * (3 - 2 * t);
+}
+
+function isRigPart(object) {
+  for (let node = object; node; node = node.parent) {
+    if (/wheel|steer|tyre|tire/i.test(node.name || '')) return true;
+  }
+  return false;
+}
+
+/**
+ * Splits triangles that sit inside a damage zone so low-poly panels have enough
+ * vertices to crumple. Untouched triangles are copied through unchanged.
+ */
+function subdivideForDamage(geometry, insideZone, maxEdge, maxVertices) {
+  let geo = geometry.index ? geometry.toNonIndexed() : geometry.clone();
+  const a = new THREE.Vector3();
+  const b = new THREE.Vector3();
+  const c = new THREE.Vector3();
+
+  for (let pass = 0; pass < 4; pass += 1) {
+    const position = geo.getAttribute('position');
+    if (!position || position.count >= maxVertices) break;
+
+    const sources = Object.keys(geo.attributes).map((name) => {
+      const attr = geo.getAttribute(name);
+      const values = new Float32Array(attr.count * attr.itemSize);
+      for (let i = 0; i < attr.count; i += 1) {
+        values[i * attr.itemSize] = attr.getX(i);
+        if (attr.itemSize > 1) values[i * attr.itemSize + 1] = attr.getY(i);
+        if (attr.itemSize > 2) values[i * attr.itemSize + 2] = attr.getZ(i);
+        if (attr.itemSize > 3) values[i * attr.itemSize + 3] = attr.getW(i);
+      }
+      return { name, itemSize: attr.itemSize, values, out: [] };
+    });
+
+    const emit = (src, i) => {
+      for (let k = 0; k < src.itemSize; k += 1) src.out.push(src.values[i * src.itemSize + k]);
+    };
+    const emitMid = (src, i, j) => {
+      for (let k = 0; k < src.itemSize; k += 1) {
+        src.out.push((src.values[i * src.itemSize + k] + src.values[j * src.itemSize + k]) * 0.5);
+      }
+    };
+
+    let didSplit = false;
+    for (let t = 0; t + 2 < position.count; t += 3) {
+      a.fromBufferAttribute(position, t);
+      b.fromBufferAttribute(position, t + 1);
+      c.fromBufferAttribute(position, t + 2);
+      const longest = Math.max(a.distanceTo(b), b.distanceTo(c), c.distanceTo(a));
+      if (longest <= maxEdge || !insideZone(a, b, c)) {
+        for (const src of sources) {
+          emit(src, t);
+          emit(src, t + 1);
+          emit(src, t + 2);
+        }
+        continue;
+      }
+      didSplit = true;
+      for (const src of sources) {
+        // a, ab, ca | ab, b, bc | ca, bc, c | ab, bc, ca
+        emit(src, t); emitMid(src, t, t + 1); emitMid(src, t + 2, t);
+        emitMid(src, t, t + 1); emit(src, t + 1); emitMid(src, t + 1, t + 2);
+        emitMid(src, t + 2, t); emitMid(src, t + 1, t + 2); emit(src, t + 2);
+        emitMid(src, t, t + 1); emitMid(src, t + 1, t + 2); emitMid(src, t + 2, t);
+      }
+    }
+    if (!didSplit) break;
+
+    const next = new THREE.BufferGeometry();
+    for (const src of sources) {
+      next.setAttribute(src.name, new THREE.BufferAttribute(new Float32Array(src.out), src.itemSize));
+    }
+    geo = next;
+  }
+
+  // Vertex colours may arrive as normalised ints; damage tinting needs floats.
+  const color = geo.getAttribute('color');
+  if (color && !(color.array instanceof Float32Array)) {
+    const floats = new Float32Array(color.count * color.itemSize);
+    for (let i = 0; i < color.count; i += 1) {
+      floats[i * color.itemSize] = color.getX(i);
+      floats[i * color.itemSize + 1] = color.getY(i);
+      floats[i * color.itemSize + 2] = color.getZ(i);
+      if (color.itemSize > 3) floats[i * color.itemSize + 3] = color.getW(i);
+    }
+    geo.setAttribute('color', new THREE.BufferAttribute(floats, color.itemSize));
+  }
+  return geo;
+}
+
+/** Caches per-vertex crumple weights so impacts only touch affected vertices. */
+function prepareBodyDamage(racer) {
+  const defs = buildDamageZoneDefs(racer.visualBounds);
+  racer.damageZoneDefs = defs;
+  racer.bodyDamage = {};
+  for (const id of Object.keys(defs)) racer.bodyDamage[id] = 0;
+  racer.damageMeshes = [];
+
+  racer.mesh.updateMatrixWorld(true);
+  const rootInverse = new THREE.Matrix4().copy(racer.mesh.matrixWorld).invert();
+  const size = racer.visualBounds.getSize(new THREE.Vector3());
+  const maxEdge = Math.max(size.y * 0.11, 0.05);
+  const maxVertices = racer.isPlayer ? 36000 : 15000;
+  const zoneList = Object.entries(defs);
+  const parts = [];
+  racer.mesh.traverse((child) => {
+    if (child.isMesh && child.geometry && !isRigPart(child)) parts.push(child);
+  });
+
+  for (const child of parts) {
+    const toRoot = new THREE.Matrix4().multiplyMatrices(rootInverse, child.matrixWorld);
+    const fromRoot = new THREE.Matrix4().copy(toRoot).invert();
+    const insideZone = (a, b, c) => {
+      _dmgVertex.set((a.x + b.x + c.x) / 3, (a.y + b.y + c.y) / 3, (a.z + b.z + c.z) / 3)
+        .applyMatrix4(toRoot);
+      for (const [, def] of zoneList) {
+        const dx = (_dmgVertex.x - def.center.x) / (def.radii.x * 1.2);
+        const dy = (_dmgVertex.y - def.center.y) / (def.radii.y * 1.2);
+        const dz = (_dmgVertex.z - def.center.z) / (def.radii.z * 1.2);
+        if (dx * dx + dy * dy + dz * dz < 1) return true;
+      }
+      return false;
+    };
+
+    const geometry = subdivideForDamage(child.geometry, insideZone, maxEdge, maxVertices);
+    const position = geometry.getAttribute('position');
+    const basePosition = Float32Array.from(position.array);
+    const colorAttr = geometry.getAttribute('color');
+    const baseColor = colorAttr ? Float32Array.from(colorAttr.array) : null;
+
+    const zones = [];
+    const affected = new Set();
+    for (const [id, def] of zoneList) {
+      const indices = [];
+      const weights = [];
+      const noise = [];
+      for (let i = 0; i < position.count; i += 1) {
+        _dmgVertex
+          .set(basePosition[i * 3], basePosition[i * 3 + 1], basePosition[i * 3 + 2])
+          .applyMatrix4(toRoot);
+        const falloff = zoneFalloff(def, _dmgVertex);
+        if (falloff <= 0.002) continue;
+        indices.push(i);
+        weights.push(falloff);
+        noise.push(
+          damageNoise(_dmgVertex.x, _dmgVertex.y, _dmgVertex.z),
+          damageNoise(_dmgVertex.y + 3.1, _dmgVertex.z, _dmgVertex.x),
+          damageNoise(_dmgVertex.z, _dmgVertex.x + 7.3, _dmgVertex.y)
+        );
+        affected.add(i);
+      }
+      if (!indices.length) continue;
+      zones.push({
+        id,
+        def,
+        indices: Int32Array.from(indices),
+        weights: Float32Array.from(weights),
+        noise: Float32Array.from(noise),
+      });
+    }
+
+    if (!zones.length) {
+      if (geometry !== child.geometry) geometry.dispose();
+      continue;
+    }
+
+    child.geometry = geometry;
+    // Flat-shaded materials derive normals in the shader, so crushed panels
+    // never need a normal recompute after a hit.
+    const materials = Array.isArray(child.material) ? child.material : [child.material];
+    const flatShaded = materials.every((material) => material?.flatShading);
+    geometry.computeBoundingSphere();
+    if (geometry.boundingSphere) geometry.boundingSphere.radius *= 1.2;
+
+    racer.damageMeshes.push({
+      mesh: child,
+      geometry,
+      toRoot,
+      fromRoot,
+      basePosition,
+      baseColor,
+      zones,
+      flatShaded,
+      affected: Int32Array.from(affected),
+      displacement: new Float32Array(position.count * 3),
+      scuff: new Float32Array(position.count),
+      shatter: new Float32Array(position.count),
+    });
+  }
+}
+
+/** Rebuilds crushed panel geometry from the current per-zone severities. */
+function deformBodyPanels(racer) {
+  if (!racer.damageMeshes?.length) return;
+  const severities = racer.bodyDamage;
+
+  for (const entry of racer.damageMeshes) {
+    for (let n = 0; n < entry.affected.length; n += 1) {
+      const i = entry.affected[n];
+      entry.displacement[i * 3] = 0;
+      entry.displacement[i * 3 + 1] = 0;
+      entry.displacement[i * 3 + 2] = 0;
+      entry.scuff[i] = 0;
+      entry.shatter[i] = 0;
+    }
+
+    for (const zone of entry.zones) {
+      const severity = severities[zone.id] || 0;
+      if (severity <= 0.02) continue;
+      const { dir, tangentA, tangentB, depth, lens } = zone.def;
+      for (let k = 0; k < zone.indices.length; k += 1) {
+        const i = zone.indices[k];
+        const weight = zone.weights[k] * severity;
+        const wrinkle = depth * 0.55 * weight;
+        // Always crush inward; noise only varies how deep each fold goes.
+        const inward = depth * weight + Math.abs(zone.noise[k * 3]) * wrinkle;
+        const foldA = zone.noise[k * 3 + 1] * wrinkle * 0.5;
+        const foldB = zone.noise[k * 3 + 2] * wrinkle * 0.5;
+        entry.displacement[i * 3] += dir.x * inward + tangentA.x * foldA + tangentB.x * foldB;
+        entry.displacement[i * 3 + 1] += dir.y * inward + tangentA.y * foldA + tangentB.y * foldB;
+        entry.displacement[i * 3 + 2] += dir.z * inward + tangentA.z * foldA + tangentB.z * foldB;
+        // Bare metal shows in the deep folds, not across the whole panel.
+        const scuff = weight * weight;
+        if (scuff > entry.scuff[i]) entry.scuff[i] = scuff;
+        if (lens && weight > entry.shatter[i]) entry.shatter[i] = weight;
+      }
+    }
+
+    const position = entry.geometry.getAttribute('position');
+    const color = entry.baseColor ? entry.geometry.getAttribute('color') : null;
+    for (let n = 0; n < entry.affected.length; n += 1) {
+      const i = entry.affected[n];
+      _dmgVertex
+        .set(entry.basePosition[i * 3], entry.basePosition[i * 3 + 1], entry.basePosition[i * 3 + 2])
+        .applyMatrix4(entry.toRoot);
+      _dmgVertex.x += entry.displacement[i * 3];
+      _dmgVertex.y += entry.displacement[i * 3 + 1];
+      _dmgVertex.z += entry.displacement[i * 3 + 2];
+      _dmgVertex.applyMatrix4(entry.fromRoot);
+      position.setXYZ(i, _dmgVertex.x, _dmgVertex.y, _dmgVertex.z);
+
+      if (!color) continue;
+      _dmgColor.setRGB(
+        entry.baseColor[i * color.itemSize],
+        entry.baseColor[i * color.itemSize + 1],
+        entry.baseColor[i * color.itemSize + 2]
+      );
+      const scuff = entry.scuff[i];
+      if (scuff > 0) _dmgColor.lerp(DAMAGE_SCUFF, Math.min(0.8, scuff * 1.15));
+      const shatter = entry.shatter[i];
+      if (shatter > 0) _dmgColor.lerp(DAMAGE_LENS, Math.min(0.95, shatter * 1.3));
+      color.setXYZ(i, _dmgColor.r, _dmgColor.g, _dmgColor.b);
+    }
+
+    position.needsUpdate = true;
+    if (color) color.needsUpdate = true;
+    if (!entry.flatShaded) entry.geometry.computeVertexNormals();
+  }
+}
+
+function captureDamageLook(racer) {
+  racer.visualDamage = 0;
+  racer.damageSmokeTimer = 0;
+  racer.sparkIndex = 0;
+  racer.brokenLampIndex = -1;
+  racer.brokenRearLamps = new Set();
+  prepareBodyDamage(racer);
+
+  const sparkCount = racer.isPlayer ? 18 : 10;
+  racer.sparks = Array.from({ length: sparkCount }, () => {
+    const mesh = new THREE.Mesh(
+      sparkGeometry,
+      new THREE.MeshBasicMaterial({
+        color: 0xffb14a,
         transparent: true,
         opacity: 0,
         depthWrite: false,
-        flatShading: true,
-      });
-      const mesh = new THREE.Mesh(smokeGeometry, material);
-      mesh.visible = false;
-      scene.add(mesh);
-      return {
-        mesh,
-        life: 0,
-        maxLife: 1.1,
-        baseOpacity: 0.5,
-        velocity: new THREE.Vector3(),
-        angular: new THREE.Vector3(),
-      };
-    })
-    : [];
+        toneMapped: false,
+      })
+    );
+    mesh.visible = false;
+    mesh.renderOrder = 9;
+    scene.add(mesh);
+    return {
+      mesh,
+      life: 0,
+      maxLife: 0.3,
+      velocity: new THREE.Vector3(),
+    };
+  });
+}
+
+function raiseZoneDamage(racer, zoneId, amount) {
+  if (!racer.bodyDamage || racer.bodyDamage[zoneId] === undefined) return;
+  racer.bodyDamage[zoneId] = THREE.MathUtils.clamp(racer.bodyDamage[zoneId] + amount, 0, 1);
+}
+
+function applyBodyImpactDamage(racer, amount, impact = {}) {
+  const worldX = impact.x ?? 0;
+  const worldZ = impact.z ?? -1;
+  const forward = worldX * Math.sin(racer.drive.yaw) + worldZ * Math.cos(racer.drive.yaw);
+  const side = worldX * Math.cos(racer.drive.yaw) - worldZ * Math.sin(racer.drive.yaw);
+  const hit = THREE.MathUtils.clamp(amount / 12, 0.18, 1);
+  const absF = Math.abs(forward);
+  const absS = Math.abs(side);
+
+  if (absF >= absS) {
+    if (forward >= 0) {
+      raiseZoneDamage(racer, 'frontBumper', hit);
+      raiseZoneDamage(racer, 'hood', hit * 0.72);
+      raiseZoneDamage(racer, side >= 0 ? 'frontRightLight' : 'frontLeftLight', hit * 0.9);
+      if (hit > 0.55) raiseZoneDamage(racer, side >= 0 ? 'frontLeftLight' : 'frontRightLight', hit * 0.35);
+    } else {
+      raiseZoneDamage(racer, 'rearBumper', hit);
+      raiseZoneDamage(racer, 'trunk', hit * 0.7);
+      const rearId = side >= 0 ? 'rearRightLight' : 'rearLeftLight';
+      raiseZoneDamage(racer, rearId, hit * 0.95);
+      if (racer.brakeLights?.length) {
+        const idx = side >= 0
+          ? racer.brakeLights.length - 1
+          : 0;
+        racer.brokenRearLamps.add(idx);
+        if (hit > 0.65 && racer.brakeLights.length > 1) {
+          racer.brokenRearLamps.add(idx === 0 ? 1 : racer.brakeLights.length - 2);
+        }
+      }
+    }
+  } else {
+    raiseZoneDamage(racer, side >= 0 ? 'rightDoor' : 'leftDoor', hit);
+    if (forward > 0.15) {
+      raiseZoneDamage(racer, 'frontBumper', hit * 0.35);
+      raiseZoneDamage(racer, side >= 0 ? 'frontRightLight' : 'frontLeftLight', hit * 0.45);
+    } else if (forward < -0.15) {
+      raiseZoneDamage(racer, 'rearBumper', hit * 0.35);
+      raiseZoneDamage(racer, side >= 0 ? 'rearRightLight' : 'rearLeftLight', hit * 0.45);
+    }
+  }
+
+  // Progressive wear: as overall health drops, secondary panels also show damage.
+  const overall = 1 - racer.health / 100;
+  if (overall > 0.45) raiseZoneDamage(racer, 'hood', 0.08);
+  if (overall > 0.6) raiseZoneDamage(racer, 'trunk', 0.08);
+  if (overall > 0.75) {
+    raiseZoneDamage(racer, 'frontBumper', 0.1);
+    raiseZoneDamage(racer, 'rearBumper', 0.1);
+  }
+}
+
+function syncVisualDamage(racer, force = false) {
+  const damage = THREE.MathUtils.clamp(1 - racer.health / 100, 0, 1);
+  if (!force && Math.abs(damage - racer.visualDamage) < 0.008) return;
+  racer.visualDamage = damage;
+
+  if (racer.wrecked) {
+    for (const id of ['frontBumper', 'hood', 'frontLeftLight', 'frontRightLight', 'rearBumper', 'trunk', 'leftDoor', 'rightDoor']) {
+      raiseZoneDamage(racer, id, 1);
+    }
+    if (racer.brakeLights?.length) {
+      racer.brokenRearLamps.add(0);
+      racer.brokenRearLamps.add(racer.brakeLights.length - 1);
+    }
+  }
+
+  deformBodyPanels(racer);
+}
+
+function spawnImpactSparks(racer, amount = 8) {
+  if (!racer.sparks?.length) return;
+  const count = Math.round(THREE.MathUtils.clamp(3 + amount * 0.55, 4, racer.sparks.length));
+  _sparkOrigin.set(
+    (Math.random() - 0.5) * racer.def.halfW * 1.4,
+    0.35 + Math.random() * 0.55,
+    (Math.random() - 0.5) * racer.def.halfL * 1.2
+  );
+  racer.mesh.localToWorld(_sparkOrigin);
+  for (let i = 0; i < count; i += 1) {
+    const spark = racer.sparks[racer.sparkIndex++ % racer.sparks.length];
+    _sparkJitter.set(
+      (Math.random() - 0.5) * 0.35,
+      Math.random() * 0.2,
+      (Math.random() - 0.5) * 0.35
+    );
+    spark.mesh.position.copy(_sparkOrigin).add(_sparkJitter);
+    spark.mesh.scale.setScalar(0.7 + Math.random() * 1.1);
+    spark.mesh.material.color.setHex(Math.random() > 0.45 ? 0xffc35a : 0xff6a2a);
+    spark.mesh.material.opacity = 1;
+    spark.mesh.visible = true;
+    spark.maxLife = 0.18 + Math.random() * 0.22;
+    spark.life = spark.maxLife;
+    const outward = 4 + Math.random() * 7;
+    spark.velocity.set(
+      (Math.random() - 0.5) * outward,
+      2.5 + Math.random() * 5,
+      (Math.random() - 0.5) * outward
+    );
+  }
+}
+
+function spawnDamageSmoke(racer, intensity = 1) {
+  if (!racer.exhaust?.length) return;
+  const particle = racer.exhaust[racer.smokeIndex++ % racer.exhaust.length];
+  const origin = new THREE.Vector3(
+    (Math.random() - 0.5) * racer.def.halfW * 0.45,
+    1.05 + Math.random() * 0.2,
+    -racer.def.halfL * 0.55 + (Math.random() - 0.5) * 0.25
+  );
+  racer.mesh.localToWorld(origin);
+  particle.mesh.position.copy(origin);
+  particle.mesh.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+  particle.startScale = (0.55 + Math.random() * 0.4) * intensity;
+  particle.mesh.scale.setScalar(particle.startScale);
+  particle.startColor.setHex(0x2a2a28);
+  particle.endColor.setHex(0x6e6a62);
+  particle.mesh.material.color.copy(particle.startColor);
+  particle.baseOpacity = 0.5 * intensity;
+  particle.mesh.material.opacity = particle.baseOpacity;
+  particle.mesh.visible = true;
+  particle.maxLife = 1.4 + Math.random() * 0.5;
+  particle.life = particle.maxLife;
+  particle.velocity.set(
+    (Math.random() - 0.5) * 0.7,
+    0.55 + Math.random() * 0.7,
+    (Math.random() - 0.5) * 0.7
+  );
+  particle.angular.set(
+    (Math.random() - 0.5) * 1.2,
+    (Math.random() - 0.5) * 1.2,
+    (Math.random() - 0.5) * 1.2
+  );
+}
+
+function updateHitFlash(racer, dt) {
+  void racer;
+  void dt;
+}
+
+function updateSparks(racer, dt) {
+  if (!racer.sparks) return;
+  for (const spark of racer.sparks) {
+    if (spark.life <= 0) continue;
+    spark.life -= dt;
+    if (spark.life <= 0) {
+      spark.mesh.visible = false;
+      continue;
+    }
+    const age = 1 - spark.life / spark.maxLife;
+    spark.velocity.y -= 18 * dt;
+    spark.velocity.multiplyScalar(Math.exp(-2.2 * dt));
+    spark.mesh.position.addScaledVector(spark.velocity, dt);
+    spark.mesh.material.opacity = (1 - age) * (1 - age);
+    spark.mesh.scale.setScalar(0.55 + (1 - age) * 0.9);
+  }
+}
+
+function spawnExhaustPuff(racer, intensity = 1) {
+  if (!racer.exhaust.length) return;
+  const particle = racer.exhaust[racer.smokeIndex++ % racer.exhaust.length];
+  const boost = racer.boostT > 0;
+  const rearZ = racer.visualBounds.min.z + 0.08;
+  const exhaustSide = racer.smokeIndex % 2 === 0 ? -1 : 1;
+  const origin = new THREE.Vector3(
+    exhaustSide * racer.def.halfW * 0.34 + (Math.random() - 0.5) * 0.12,
+    0.28 + Math.random() * 0.16,
+    rearZ
+  );
+  racer.mesh.localToWorld(origin);
+
+  const backSpeed = 1.1 + Math.min(2.4, Math.abs(racer.drive.speed) * 0.045);
+  particle.mesh.position.copy(origin);
+  particle.mesh.rotation.set(
+    Math.random() * Math.PI,
+    Math.random() * Math.PI,
+    Math.random() * Math.PI
+  );
+  particle.startScale = (0.45 + Math.random() * 0.28) * intensity;
+  particle.mesh.scale.setScalar(particle.startScale);
+  particle.startColor.setHex(boost ? 0x6aa9c8 : 0x4e504c);
+  particle.endColor.setHex(boost ? 0xd7eef8 : 0xc5c7c1);
+  particle.mesh.material.color.copy(particle.startColor);
+  particle.baseOpacity = (boost ? 0.58 : 0.42) * intensity;
+  particle.mesh.material.opacity = particle.baseOpacity;
+  particle.mesh.visible = true;
+  particle.maxLife = (boost ? 1.05 : 1.35) + Math.random() * 0.35;
+  particle.life = particle.maxLife;
+  particle.velocity.set(
+    -Math.sin(racer.drive.yaw) * backSpeed + (Math.random() - 0.5) * 0.85,
+    0.35 + Math.random() * 0.55,
+    -Math.cos(racer.drive.yaw) * backSpeed + (Math.random() - 0.5) * 0.85
+  );
+  particle.angular.set(
+    (Math.random() - 0.5) * 1.6,
+    (Math.random() - 0.5) * 1.6,
+    (Math.random() - 0.5) * 1.6
+  );
 }
 
 function updateVehicleEffects(racer, dt, accelerating, braking) {
-  for (const light of racer.brakeLights) {
-    light.visible = braking;
+  const damageRatio = THREE.MathUtils.clamp(1 - racer.health / 100, 0, 1);
+  const rearLeftBroken = (racer.bodyDamage?.rearLeftLight || 0) > 0.35;
+  const rearRightBroken = (racer.bodyDamage?.rearRightLight || 0) > 0.35;
+  for (let i = 0; i < racer.brakeLights.length; i += 1) {
+    const light = racer.brakeLights[i];
+    const onLeft = i < racer.brakeLights.length / 2;
+    const broken = racer.brokenRearLamps?.has(i)
+      || (onLeft ? rearLeftBroken : rearRightBroken)
+      || i === racer.brokenLampIndex;
+    light.visible = braking || broken;
+    light.material.color.setHex(broken ? 0x210d0a : 0xff1808);
+    if (light.children[0]) light.children[0].visible = braking && !broken;
   }
 
-  if (!racer.isPlayer) return;
+  updateHitFlash(racer, dt);
+  updateSparks(racer, dt);
+
   racer.smokeTimer -= dt;
-  if (accelerating && Math.abs(racer.drive.speed) > 1.5 && racer.smokeTimer <= 0) {
-    racer.smokeTimer = racer.boostT > 0 ? 0.018 : 0.035;
-    const particle = racer.exhaust[racer.smokeIndex++ % racer.exhaust.length];
-    const exhaustSide = racer.smokeIndex % 2 === 0 ? -1 : 1;
-    const origin = new THREE.Vector3(
-      exhaustSide * racer.def.halfW * 0.38 + (Math.random() - 0.5) * 0.08,
-      0.38,
-      -racer.def.halfL * 0.95
-    );
-    racer.mesh.localToWorld(origin);
-    particle.mesh.position.copy(origin);
-    particle.mesh.rotation.set(
-      Math.random() * Math.PI,
-      Math.random() * Math.PI,
-      Math.random() * Math.PI
-    );
-    particle.mesh.scale.setScalar(0.72 + Math.random() * 0.35);
-    particle.mesh.material.color.setHex(racer.boostT > 0 ? 0x8fdcff : 0xa8aaa5);
-    particle.baseOpacity = racer.boostT > 0 ? 0.62 : 0.48;
-    particle.mesh.material.opacity = particle.baseOpacity;
-    particle.mesh.visible = true;
-    particle.maxLife = 0.95 + Math.random() * 0.32;
-    particle.life = particle.maxLife;
-    particle.velocity.set(
-      -Math.sin(racer.drive.yaw) * 1.8 + (Math.random() - 0.5) * 0.65,
-      0.55 + Math.random() * 0.45,
-      -Math.cos(racer.drive.yaw) * 1.8 + (Math.random() - 0.5) * 0.65
-    );
-    particle.angular.set(
-      (Math.random() - 0.5) * 2.2,
-      (Math.random() - 0.5) * 2.2,
-      (Math.random() - 0.5) * 2.2
-    );
+  racer.damageSmokeTimer -= dt;
+  const moving = Math.abs(racer.drive.speed) > 1.2;
+  if (accelerating && moving && racer.smokeTimer <= 0) {
+    const boost = racer.boostT > 0;
+    const speedFactor = THREE.MathUtils.clamp(Math.abs(racer.drive.speed) / 28, 0.35, 1);
+    racer.smokeTimer = boost
+      ? 0.016
+      : THREE.MathUtils.lerp(0.055, 0.028, speedFactor);
+    spawnExhaustPuff(racer, boost ? 1.15 : 0.85 + speedFactor * 0.25);
+    if (boost || speedFactor > 0.75) spawnExhaustPuff(racer, 0.7);
+  } else if (!accelerating && moving && Math.abs(racer.drive.speed) > 8 && racer.smokeTimer <= 0) {
+    // Thin idle trail while coasting keeps the field feeling alive.
+    racer.smokeTimer = racer.isPlayer ? 0.12 : 0.18;
+    spawnExhaustPuff(racer, 0.35);
+  }
+
+  // Save smoke for serious damage so ordinary collision wear remains readable.
+  if ((damageRatio > 0.8 || racer.wrecked) && racer.damageSmokeTimer <= 0) {
+    const severity = racer.wrecked ? 1 : damageRatio;
+    racer.damageSmokeTimer = THREE.MathUtils.lerp(0.48, 0.14, severity);
+    spawnDamageSmoke(racer, 0.35 + severity * 0.55);
+    if (racer.wrecked) spawnDamageSmoke(racer, 0.5);
   }
 
   for (const particle of racer.exhaust) {
@@ -1103,13 +1775,21 @@ function updateVehicleEffects(racer, dt, accelerating, braking) {
       particle.mesh.visible = false;
       continue;
     }
+    const age = 1 - particle.life / particle.maxLife;
+    const ease = age * age;
+    particle.velocity.multiplyScalar(Math.exp(-1.35 * dt));
+    particle.velocity.y += 0.55 * dt;
     particle.mesh.position.addScaledVector(particle.velocity, dt);
     particle.mesh.rotation.x += particle.angular.x * dt;
     particle.mesh.rotation.y += particle.angular.y * dt;
     particle.mesh.rotation.z += particle.angular.z * dt;
-    const age = 1 - particle.life / particle.maxLife;
-    particle.mesh.scale.setScalar(0.8 + age * 1.95);
-    particle.mesh.material.opacity = (1 - age) * particle.baseOpacity;
+    particle.mesh.scale.setScalar(particle.startScale * (1 + ease * 3.4));
+    particle.mesh.material.color.copy(particle.startColor).lerp(particle.endColor, ease);
+    // Soft billowing fade: denser early, thinner as it expands.
+    const fade = age < 0.18
+      ? THREE.MathUtils.smoothstep(age / 0.18, 0, 1)
+      : 1 - THREE.MathUtils.smoothstep((age - 0.18) / 0.82, 0, 1);
+    particle.mesh.material.opacity = fade * particle.baseOpacity;
   }
 }
 
@@ -1168,6 +1848,7 @@ function clearRacers() {
   for (const r of racers) {
     scene.remove(r.mesh);
     for (const particle of r.exhaust || []) scene.remove(particle.mesh);
+    for (const spark of r.sparks || []) scene.remove(spark.mesh);
   }
   racers.length = 0;
 }
@@ -1266,11 +1947,14 @@ async function spawnField(playerId) {
   updatePlaceHud();
 }
 
-function applyDamage(racer, amount) {
+function applyDamage(racer, amount, impact = null) {
   if (racer.wrecked || racer.hitCooldown > 0 || amount <= 0) return;
   racer.health = Math.max(0, racer.health - amount);
   racer.hitCooldown = 0.45;
   racer.drive.speed *= 0.88;
+  applyBodyImpactDamage(racer, amount, impact || {});
+  syncVisualDamage(racer, true);
+  spawnImpactSparks(racer, amount);
   if (racer.isPlayer) {
     racer.pickupMessage = `IMPACT -${Math.round(amount)}%`;
     racer.pickupMessageT = 0.85;
@@ -1282,13 +1966,41 @@ function applyDamage(racer, amount) {
     racer.onPad = false;
     racer.slipT = 0;
     racer.slipAngle = 0;
+    syncVisualDamage(racer, true);
     if (racer.isPlayer) showLoss('Your car reached 100% damage and is totaled.');
   }
 }
 
-window.__desertLoop.damagePlayer = (amount = 100) => {
+window.__desertLoop.damagePlayer = (amount = 100, from = 'all') => {
   const player = racers.find((racer) => racer.isPlayer);
-  if (player) applyDamage(player, amount);
+  if (!player) return;
+  const yaw = player.drive.yaw;
+  const local = {
+    front: { x: Math.sin(yaw), z: Math.cos(yaw) },
+    rear: { x: -Math.sin(yaw), z: -Math.cos(yaw) },
+    right: { x: Math.cos(yaw), z: -Math.sin(yaw) },
+    left: { x: -Math.cos(yaw), z: Math.sin(yaw) },
+  };
+  const dirs = from === 'all' ? Object.values(local) : [local[from] || local.front];
+  const hit = Math.max(8, amount / dirs.length);
+  for (const dir of dirs) {
+    player.hitCooldown = 0;
+    applyDamage(player, hit, { ...dir, source: 'debug' });
+  }
+};
+// Parks the camera around the player so body damage can be inspected panel by panel.
+window.__desertLoop.inspectPlayer = (angle = 0, dist = 5.5, height = 1.9) => {
+  const player = racers.find((racer) => racer.isPlayer);
+  if (!player) return;
+  const yaw = player.drive.yaw + angle;
+  const target = player.mesh.position.clone().add(new THREE.Vector3(0, 0.7, 0));
+  camera.position.set(
+    target.x + Math.sin(yaw) * dist,
+    target.y + height,
+    target.z + Math.cos(yaw) * dist
+  );
+  camera.lookAt(target);
+  window.__freezeCam = true;
 };
 window.__desertLoop.setRacerState = (index, state) => {
   const racer = racers[index];
@@ -1314,7 +2026,11 @@ function constrainToTrack(racer) {
   const vz = Math.cos(d.yaw) * d.speed;
   const vLat = vx * side.x + vz * side.z;
   if (vLat * sign > 0) {
-    applyDamage(racer, THREE.MathUtils.clamp(Math.abs(vLat) * 0.45 + Math.abs(d.speed) * 0.06, 2, 14));
+    applyDamage(
+      racer,
+      THREE.MathUtils.clamp(Math.abs(vLat) * 0.45 + Math.abs(d.speed) * 0.06, 2, 14),
+      { x: side.x * sign, z: side.z * sign, source: 'wall' }
+    );
     const rvx = vx - vLat * side.x;
     const rvz = vz - vLat * side.z;
     d.speed = Math.sin(d.yaw) * rvx + Math.cos(d.yaw) * rvz;
@@ -1400,8 +2116,8 @@ function resolveRacerCollisions() {
             if (!b.wrecked) b.drive.speed *= speedRetention;
             if (closingSpeed > 4) {
               const impact = THREE.MathUtils.clamp(2 + closingSpeed * 0.28, 2, 14);
-              applyDamage(a, impact);
-              applyDamage(b, impact);
+              applyDamage(a, impact, { x: mtv.x, z: mtv.z, source: 'car' });
+              applyDamage(b, impact, { x: -mtv.x, z: -mtv.z, source: 'car' });
             }
           }
         }
@@ -1479,7 +2195,7 @@ function updatePowerups(dt) {
         racer.onPad = true;
         if (racer.padCooldown <= 0) {
           racer.padCooldown = 1.1;
-          racer.boostT = Math.max(racer.boostT, 0.85);
+          racer.boostT = Math.max(racer.boostT, 5);
           d.speed = Math.min(d.speed + 5, effectiveMax(racer));
           if (racer.isPlayer) {
             racer.pickupMessage = 'PAD BOOST';
@@ -1507,12 +2223,23 @@ function updatePowerups(dt) {
         } else if (pu.type === 'repair') {
           const repair = Math.min(35, 100 - racer.health);
           racer.health = Math.min(100, racer.health + 35);
+          if (repair > 0) {
+            racer.wrecked = false;
+            for (const zoneId of Object.keys(racer.bodyDamage || {})) {
+              racer.bodyDamage[zoneId] = Math.max(0, racer.bodyDamage[zoneId] - repair / 100);
+            }
+            if (racer.health >= 60) {
+              racer.brokenLampIndex = -1;
+              racer.brokenRearLamps?.clear();
+            }
+            syncVisualDamage(racer, true);
+          }
           if (racer.isPlayer) {
             racer.pickupMessage = repair > 0 ? `REPAIR +${Math.round(repair)}%` : 'FULL HEALTH';
             racer.pickupMessageT = 1.25;
           }
         } else {
-          racer.boostT = Math.max(racer.boostT, pu.type === 'nitro' ? 2.6 : 1.7);
+          racer.boostT = Math.max(racer.boostT, 5);
           if (racer.isPlayer) {
             d.speed = Math.min(d.speed + 6, effectiveMax(racer));
             racer.pickupMessage = pu.type === 'nitro' ? 'NITRO BOOST' : 'TURBO BOOST';
@@ -1546,13 +2273,15 @@ function updatePowerups(dt) {
     const damage = Math.round(100 - player.health);
     damageValueEl.textContent = `${damage}%`;
     damageFillEl.style.width = `${damage}%`;
-    damageHudEl.classList.toggle('critical', player.health < 35);
+    damageHudEl.classList.toggle('warn', damage >= 45 && damage < 75);
+    damageHudEl.classList.toggle('critical', damage >= 75);
   }
   if (player && fuelHudEl && fuelValueEl && fuelFillEl) {
     const fuel = Math.round(player.fuel);
     fuelValueEl.textContent = `${fuel}%`;
     fuelFillEl.style.width = `${fuel}%`;
-    fuelHudEl.classList.toggle('critical', player.fuel < 20);
+    fuelHudEl.classList.toggle('warn', fuel > 20 && fuel <= 45);
+    fuelHudEl.classList.toggle('critical', fuel <= 20);
   }
 }
 
@@ -1660,7 +2389,7 @@ function updatePlayer(dt) {
   applyPose(racer, steerInput);
   updateVehicleEffects(racer, dt, accelerating, braking || reversePressed);
   updateLap(racer);
-  speedEl.textContent = String(Math.round(Math.abs(d.speed) * 3.6));
+  updateSpeedometer(d.speed, racer.boostT > 0 || racer.onPad);
 }
 
 function chooseAiPassingLane(racer, p, side) {
@@ -1855,8 +2584,11 @@ function applyPose(racer, steerInput) {
   const d = racer.drive;
   d.x = THREE.MathUtils.clamp(d.x, -280, 280);
   d.z = THREE.MathUtils.clamp(d.z, -200, 340);
-  racer.mesh.position.set(d.x, 0, d.z);
+  const sank = racer.wrecked ? -0.06 : 0;
+  racer.mesh.position.set(d.x, sank, d.z);
   racer.mesh.rotation.y = d.yaw;
+  racer.mesh.rotation.z = racer.wrecked ? 0.12 : 0;
+  racer.mesh.rotation.x = racer.wrecked ? 0.04 : 0;
   const spin = (d.speed * 0.016) / 0.34;
   for (const key of ['fl', 'fr', 'rl', 'rr']) {
     if (racer.wheels[key]) racer.wheels[key].rotation.x += spin;
@@ -1892,6 +2624,22 @@ function updateCamera(dt) {
   }
   const player = racers.find((r) => r.isPlayer);
   if (!player) return;
+  if (lossOrbitStart !== null) {
+    const elapsed = clock.elapsedTime - lossOrbitStart;
+    const orbit = player.drive.yaw + elapsed * 0.42;
+    const targetY = player.mesh.position.y + 0.75;
+    camera.position.set(
+      player.mesh.position.x + Math.sin(orbit) * 7.4,
+      targetY + 2.5,
+      player.mesh.position.z + Math.cos(orbit) * 7.4
+    );
+    if (camera.fov !== 42) {
+      camera.fov = 42;
+      camera.updateProjectionMatrix();
+    }
+    camera.lookAt(player.mesh.position.x, targetY, player.mesh.position.z);
+    return;
+  }
   if (cameraYaw === null) cameraYaw = player.drive.yaw;
   const yawDelta = Math.atan2(
     Math.sin(player.drive.yaw - cameraYaw),
@@ -1941,25 +2689,33 @@ function resetPlayer() {
 function showMenu() {
   mode = 'menu';
   cameraYaw = null;
+  lossOrbitStart = null;
   introEl.classList.remove('hidden');
   hudEl.classList.remove('on');
   finishEl.classList.remove('show');
+  finishEl.classList.remove('loss');
   countdownEl.classList.remove('show');
   clearRacers();
+  updateSpeedometer(0, false);
   camera.position.set(40, 68, 150);
   camera.lookAt(10, 2, 40);
 }
 
 async function startRace() {
   mode = 'countdown';
+  lossOrbitStart = null;
   introEl.classList.add('hidden');
   finishEl.classList.remove('show');
+  finishEl.classList.remove('loss');
   lapTotalEl.textContent = String(totalLaps);
   lapCountEl.textContent = '1';
   damageValueEl.textContent = '0%';
   damageFillEl.style.width = '0%';
+  damageHudEl.classList.remove('warn', 'critical');
   fuelValueEl.textContent = '100%';
   fuelFillEl.style.width = '100%';
+  fuelHudEl.classList.remove('warn', 'critical');
+  updateSpeedometer(0, false);
   await spawnField(selectedId);
   hudEl.classList.add('on');
 
@@ -1975,6 +2731,8 @@ async function startRace() {
 
 function showFinish(place) {
   mode = 'finish';
+  lossOrbitStart = null;
+  finishEl.classList.remove('loss');
   finishTitle.textContent = place === 1 ? 'You win!' : `${ordinal(place)} place`;
   finishMsg.textContent = place === 1
     ? 'Clean run around Desert Loop.'
@@ -1984,8 +2742,10 @@ function showFinish(place) {
 
 function showLoss(message) {
   mode = 'finish';
+  lossOrbitStart = clock.elapsedTime;
   finishTitle.textContent = 'Race lost';
   finishMsg.textContent = message;
+  finishEl.classList.add('loss');
   finishEl.classList.add('show');
 }
 
@@ -2021,6 +2781,10 @@ renderer.setAnimationLoop(() => {
       updatePlaceHud();
     }
     updateCamera(dt);
+    if (lossOrbitStart !== null) {
+      const player = racers.find((r) => r.isPlayer);
+      if (player) updateVehicleEffects(player, dt, false, false);
+    }
   }
   renderer.render(scene, camera);
 });
