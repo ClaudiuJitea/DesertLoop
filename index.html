@@ -938,7 +938,7 @@
       stroke-width: 11;
       stroke-linecap: round;
     }
-    #speedo.boost .progress { stroke: #3aa0e8; }
+    #speedo.boost .progress { stroke: #e23a32; }
     #speedo .redzone {
       fill: none;
       stroke: rgba(214, 64, 48, 0.55);
@@ -968,8 +968,8 @@
       stroke-width: 0.6;
     }
     #speedo.boost .needle-shaft {
-      fill: #3aa0e8;
-      stroke: #d7efff;
+      fill: #e23a32;
+      stroke: #ffd0c8;
     }
     #speedo .needle-tail { fill: #f3ecdc; }
     #speedo .hub-outer { fill: #f3ecdc; }
@@ -981,13 +981,13 @@
     #boostHud {
       position: absolute;
       left: 50%;
-      bottom: 88px;
+      bottom: 72px;
       transform: translateX(-50%);
       font-family: "Bebas Neue", sans-serif;
-      font-size: 26px;
-      letter-spacing: 0.12em;
-      padding: 6px 16px;
-      border-radius: 6px;
+      font-size: 18px;
+      letter-spacing: 0.16em;
+      padding: 4px 14px;
+      border-radius: 999px;
       background: rgba(196, 90, 44, 0.92);
       color: #fff8f0;
       opacity: 0;
@@ -995,10 +995,163 @@
       transition: opacity 0.15s ease;
     }
     #boostHud.on { opacity: 1; }
-    #boostHud.repair { background: rgba(46, 142, 80, 0.94); }
-    #boostHud.fuel { background: rgba(189, 139, 24, 0.95); }
-    #boostHud.impact { background: rgba(185, 45, 38, 0.94); }
     #boostHud.oil { background: rgba(27, 29, 27, 0.95); }
+    #boostHud { display: none; }
+    #pickupToast {
+      position: absolute;
+      left: 50%;
+      top: 86px;
+      bottom: auto;
+      transform: translateX(-50%) translateY(-6px);
+      opacity: 0;
+      pointer-events: none;
+      min-width: 220px;
+      max-width: min(320px, calc(100vw - 36px));
+      transition: opacity 0.18s ease, transform 0.18s ease;
+      --toast: #c45a2c;
+      --toast-ink: #f3ecdc;
+    }
+    #pickupToast.on {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+    #pickupToast.pop {
+      animation: toast-in 0.28s ease-out;
+    }
+    #pickupToast .toast-burst { display: none; }
+    #pickupToast .toast-card {
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 14px 8px 10px;
+      border-radius: 2px;
+      background: rgba(16, 19, 24, 0.72);
+      border: 1px solid rgba(243, 236, 220, 0.12);
+      border-left: 3px solid var(--toast);
+      box-shadow: 0 8px 22px rgba(16, 20, 26, 0.22);
+      color: var(--toast-ink);
+      backdrop-filter: blur(8px);
+    }
+    #pickupToast .toast-icon {
+      width: 22px;
+      height: 22px;
+      flex: none;
+      display: grid;
+      place-items: center;
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
+      color: var(--toast);
+      opacity: 0.95;
+    }
+    #pickupToast .toast-icon svg {
+      width: 18px;
+      height: 18px;
+    }
+    #pickupToast .toast-copy {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 18px;
+      flex: 1;
+      min-width: 0;
+    }
+    #pickupToast .toast-kicker { display: none; }
+    #pickupToast .toast-title {
+      font-family: "DM Sans", sans-serif;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+    }
+    #pickupToast .toast-detail {
+      font-family: "DM Sans", sans-serif;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      opacity: 0.72;
+    }
+    #pickupToast.boost { --toast: #e23a32; }
+    #pickupToast.fuel { --toast: #ff9a1a; }
+    #pickupToast.repair { --toast: #1ad45a; }
+    #pickupToast.oil { --toast: #c8c2b4; }
+    #pickupToast.impact { --toast: #d45b52; }
+    #pickupToast.empty { --toast: #c46a3c; }
+    #pickupToast.nitro { --toast: #b44cff; }
+    @keyframes toast-in {
+      from { transform: translateX(-50%) translateY(-8px); opacity: 0; }
+      to { transform: translateX(-50%) translateY(0); opacity: 1; }
+    }
+    .meter.flash {
+      animation: toast-meter 0.55s ease;
+    }
+    @keyframes toast-meter {
+      0% { box-shadow: 0 0 0 0 rgba(243, 236, 220, 0.0), 0 10px 24px rgba(26, 31, 38, 0.28); }
+      35% { box-shadow: 0 0 0 6px rgba(243, 236, 220, 0.18), 0 10px 24px rgba(26, 31, 38, 0.28); }
+      100% { box-shadow: 0 0 0 0 rgba(243, 236, 220, 0.0), 0 10px 24px rgba(26, 31, 38, 0.28); }
+    }
+    #speedFx {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      --speed: 0;
+    }
+    #speedFx.on { opacity: 1; }
+    #speedFx .speed-vignette {
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 64% 58% at 50% 52%, transparent 34%, rgba(10, 24, 40, 0.46) 100%);
+      box-shadow:
+        inset 0 0 140px rgba(226, 58, 50, calc(0.14 + var(--speed) * 0.24)),
+        inset 0 0 80px rgba(255, 176, 82, calc(var(--speed) * 0.12));
+    }
+    #speedFx .speed-lines {
+      position: absolute;
+      inset: -8%;
+      opacity: calc(0.28 + var(--speed) * 0.62);
+      background:
+        repeating-linear-gradient(
+          98deg,
+          transparent 0 16px,
+          rgba(255, 228, 190, 0) 18px,
+          rgba(255, 210, 140, 0.28) 19px,
+          rgba(255, 210, 140, 0.16) 20px,
+          transparent 22px 50px
+        ),
+        repeating-linear-gradient(
+          82deg,
+          transparent 0 24px,
+          rgba(255, 196, 110, 0.14) 26px,
+          transparent 28px 64px
+        );
+      background-size: 220% 220%;
+      animation: speed-lines 0.18s linear infinite;
+      mask-image: linear-gradient(90deg, #000 0%, transparent 26%, transparent 74%, #000 100%);
+      -webkit-mask-image: linear-gradient(90deg, #000 0%, transparent 26%, transparent 74%, #000 100%);
+    }
+    #speedFx .speed-warp {
+      position: absolute;
+      inset: 8% 18%;
+      border-radius: 50%;
+      border: 2px solid rgba(255, 120, 100, calc(var(--speed) * 0.2));
+      box-shadow:
+        0 0 28px rgba(226, 58, 50, calc(var(--speed) * 0.18)),
+        inset 0 0 40px rgba(255, 200, 120, calc(var(--speed) * 0.05));
+      transform: scale(calc(0.92 + var(--speed) * 0.12));
+      opacity: calc(var(--speed) * 0.7);
+    }
+    @keyframes speed-lines {
+      from { background-position: 0 0, 0 0; }
+      to { background-position: -90px 48px, 78px -36px; }
+    }
+    #speedo.boost {
+      filter: drop-shadow(0 0 18px rgba(226, 58, 50, 0.5));
+    }
     .meter {
       position: absolute;
       right: 18px;
@@ -1070,6 +1223,50 @@
       border-radius: inherit;
       transition: width 0.15s ease, background 0.2s ease, box-shadow 0.2s ease;
     }
+    #nitroHud { bottom: 162px; }
+    #nitroHud.ready {
+      box-shadow:
+        0 10px 24px rgba(26, 31, 38, 0.28),
+        inset 0 0 0 1px rgba(196, 107, 255, 0.35);
+    }
+    #nitroHud.empty { opacity: 0.78; }
+    #nitroHud .nitro-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    #nitroHud .nitro-pips {
+      display: flex;
+      gap: 6px;
+    }
+    #nitroHud .nitro-pip {
+      width: 34px;
+      height: 10px;
+      border-radius: 999px;
+      background: rgba(8, 10, 12, 0.55);
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+    }
+    #nitroHud .nitro-pip.on {
+      background: linear-gradient(90deg, #c46bff, #7a28e0);
+      box-shadow: 0 0 10px rgba(180, 76, 255, 0.35);
+    }
+    #nitroHud .nitro-key {
+      min-width: 22px;
+      padding: 3px 7px;
+      border-radius: 6px;
+      border: 1px solid rgba(243, 236, 220, 0.22);
+      font-family: "Bebas Neue", sans-serif;
+      font-size: 15px;
+      letter-spacing: 0.08em;
+      text-align: center;
+      opacity: 0.78;
+    }
+    #nitroHud.ready .nitro-key {
+      color: #f6edff;
+      border-color: rgba(196, 107, 255, 0.45);
+      opacity: 1;
+    }
     #fuelHud { bottom: 92px; }
     #fuelFill {
       background: linear-gradient(90deg, #7db34a, #d2b03a);
@@ -1114,6 +1311,9 @@
       .meter-track { height: 10px; }
       #damageHud { bottom: 12px; }
       #fuelHud { bottom: 74px; }
+      #nitroHud { bottom: 136px; }
+      #pickupToast { top: 74px; min-width: 0; }
+      #boostHud { bottom: 58px; }
     }
     #countdown {
       position: fixed;
@@ -1213,7 +1413,7 @@
         <p class="tagline">Choose your machine and own the desert. Hit the boost line, master the sweepers, and race for the flag.</p>
         <div class="hero-badges">
           <span>8 racers</span>
-          <span>Boost + repair</span>
+          <span>Boost pads</span>
           <span>1,640 m circuit</span>
         </div>
       </header>
@@ -1251,6 +1451,11 @@
   <div id="countdown"></div>
 
   <div id="hud">
+    <div id="speedFx" aria-hidden="true">
+      <div class="speed-vignette"></div>
+      <div class="speed-lines"></div>
+      <div class="speed-warp"></div>
+    </div>
     <div id="title">Desert Loop</div>
     <div id="place" class="panel">1st</div>
     <div id="lap" class="panel">Lap <span class="num" id="lapCount">1</span> / <span id="lapTotal">3</span></div>
@@ -1278,6 +1483,22 @@
         <circle class="hub-inner" cx="100" cy="100" r="4.5" />
       </svg>
     </div>
+    <div id="nitroHud" class="meter empty" aria-label="Nitro">
+      <div class="meter-label">
+        <span class="meter-title">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M9 2h6l.8 3H19v2h-1.2l-1.1 13H7.3L6.2 7H5V5h3.2L9 2zm1.2 3 .5-1.5h2.6L13.8 5H10.2zM8.3 7l.9 11h5.6l.9-11H8.3z"/></svg>
+          Nitro
+        </span>
+        <strong id="nitroValue">—</strong>
+      </div>
+      <div class="nitro-row">
+        <div class="nitro-pips" id="nitroPips">
+          <span class="nitro-pip"></span>
+          <span class="nitro-pip"></span>
+        </div>
+        <span class="nitro-key">N</span>
+      </div>
+    </div>
     <div id="fuelHud" class="meter" aria-label="Fuel">
       <div class="meter-label">
         <span class="meter-title">
@@ -1297,6 +1518,17 @@
         <strong id="damageValue">0%</strong>
       </div>
       <div class="meter-track"><div class="meter-fill" id="damageFill"></div></div>
+    </div>
+    <div id="pickupToast" aria-live="polite">
+      <div class="toast-burst"></div>
+      <div class="toast-card">
+        <div class="toast-icon" id="pickupToastIcon"></div>
+        <div class="toast-copy">
+          <span class="toast-kicker" id="pickupToastKicker">Pickup</span>
+          <strong class="toast-title" id="pickupToastTitle">REFUEL</strong>
+          <span class="toast-detail" id="pickupToastDetail">+18% in the tank</span>
+        </div>
+      </div>
     </div>
     <div id="boostHud">BOOST</div>
   </div>

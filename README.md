@@ -21,6 +21,7 @@ Open [http://localhost:8765](http://localhost:8765).
 | `W` / `↑` | Accelerate |
 | `S` / `↓` | Brake / reverse |
 | `A` / `←` · `D` / `→` | Steer |
+| `N` | Use stored nitro |
 | Garage UI | Choose car and lap count (3 or 5) |
 
 ## Features
@@ -28,7 +29,9 @@ Open [http://localhost:8765](http://localhost:8765).
 - Four driveable cars: Camper Van, Pickup Truck, Muscle Car, Hatchback
 - AI pack with passing, blocking recovery, and lane changes
 - Fuel and damage meters; race ends if you run dry or get totaled
-- Pickups on track: boost, nitro, fuel, and repair
+- Boost pads on the racing line, plus fuel, repair, and nitro pickups
+- Nitro charges are stored and fired with `N`; pickups collect only on a real car touch
+- Speed streaks and camera punch while boosting
 - Oil slicks that make the car slip briefly
 - Procedural brake lights, exhaust smoke, and impact sparks
 
