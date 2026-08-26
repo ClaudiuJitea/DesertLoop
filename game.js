@@ -557,6 +557,7 @@ addEventListener('keydown', (e) => {
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
   if (e.code === 'KeyR' && mode === 'race') resetPlayer();
   if (e.code === 'KeyN' && mode === 'race' && !e.repeat) tryUseNitro();
+  if (e.code === 'KeyV' && !e.repeat && (mode === 'race' || mode === 'countdown')) toggleCameraView();
   if (e.code === 'KeyT' && !e.repeat) radioManager.nextStation();
   if (e.code === 'BracketRight' && !e.repeat) radioManager.nextStation();
   if (e.code === 'BracketLeft' && !e.repeat) radioManager.prevStation();
@@ -2476,9 +2477,38 @@ const lookPos = new THREE.Vector3();
 const _q = new THREE.Quaternion();
 const _y = new THREE.Vector3(0, 1, 0);
 let cameraYaw = null;
+let cameraView = 'chase'; // 'chase' | 'cockpit'
+let viewBlendT = 0;
+let targetViewBlendT = 0;
 const CHASE_FOV = 49;
 const BOOST_FOV = 59;
+const COCKPIT_FOV = 60;
+const COCKPIT_BOOST_FOV = 72;
 let chaseFov = CHASE_FOV;
+
+function getCockpitOffset(vehicleId) {
+  switch (vehicleId) {
+    case 'camper-van-8d10e2':
+      return { pos: new THREE.Vector3(0.28, 1.66, 0.65), look: new THREE.Vector3(0.24, 1.38, 32) };
+    case 'pickup-truck-70s-8c0080':
+      return { pos: new THREE.Vector3(0.24, 1.42, 0.35), look: new THREE.Vector3(0.20, 1.18, 32) };
+    case 'muscle-car-60s-524d46':
+      return { pos: new THREE.Vector3(0.22, 1.16, 0.20), look: new THREE.Vector3(0.18, 0.98, 32) };
+    case 'hatchback-80s-e95554':
+    default:
+      return { pos: new THREE.Vector3(0.20, 1.20, 0.18), look: new THREE.Vector3(0.16, 1.02, 32) };
+  }
+}
+
+function toggleCameraView() {
+  cameraView = cameraView === 'chase' ? 'cockpit' : 'chase';
+  targetViewBlendT = cameraView === 'cockpit' ? 1.0 : 0.0;
+  if (mode === 'race' || mode === 'countdown') {
+    const player = racers.find((r) => r.isPlayer);
+    announcePickup(player, 'view', cameraView === 'cockpit' ? 'INSIDE VIEW' : 'CHASE VIEW', 'V', 0.85);
+  }
+}
+
 let speedFxIntensity = 0;
 let speedFxSpawn = 0;
 const speedStreaks = [];
@@ -3193,7 +3223,13 @@ function syncVisualDamage(racer, force = false) {
   if (!force && Math.abs(damage - racer.visualDamage) < 0.008) return;
   racer.visualDamage = damage;
 
-  if (racer.wrecked) {
+  if (damage <= 0.005) {
+    for (const id of Object.keys(racer.bodyDamage || {})) {
+      racer.bodyDamage[id] = 0;
+    }
+    racer.brokenLampIndex = -1;
+    racer.brokenRearLamps?.clear();
+  } else if (racer.wrecked) {
     for (const id of ['frontBumper', 'hood', 'frontLeftLight', 'frontRightLight', 'rearBumper', 'trunk', 'leftDoor', 'rightDoor']) {
       raiseZoneDamage(racer, id, 1);
     }
@@ -3204,6 +3240,39 @@ function syncVisualDamage(racer, force = false) {
   }
 
   deformBodyPanels(racer);
+}
+
+function repairRacer(racer, amount) {
+  if (!racer) return 0;
+  const previousHealth = racer.health;
+  racer.health = THREE.MathUtils.clamp(racer.health + amount, 0, 100);
+  const actualRepaired = racer.health - previousHealth;
+
+  if (racer.health >= 99.5) {
+    racer.health = 100;
+    racer.wrecked = false;
+    racer.brokenLampIndex = -1;
+    racer.brokenRearLamps?.clear();
+    for (const zoneId of Object.keys(racer.bodyDamage || {})) {
+      racer.bodyDamage[zoneId] = 0;
+    }
+  } else {
+    racer.wrecked = false;
+    const remainingRatio = (100 - racer.health) / 100;
+    for (const zoneId of Object.keys(racer.bodyDamage || {})) {
+      racer.bodyDamage[zoneId] = Math.min(
+        remainingRatio,
+        Math.max(0, (racer.bodyDamage[zoneId] || 0) - actualRepaired / 60)
+      );
+    }
+    if (racer.health >= 60) {
+      racer.brokenLampIndex = -1;
+      racer.brokenRearLamps?.clear();
+    }
+  }
+
+  syncVisualDamage(racer, true);
+  return actualRepaired;
 }
 
 function spawnImpactSparks(racer, amount = 8) {
@@ -3640,11 +3709,13 @@ function constrainToTrack(racer) {
   const vz = Math.cos(d.yaw) * d.speed;
   const vLat = vx * side.x + vz * side.z;
   if (vLat * sign > 0) {
-    applyDamage(
-      racer,
-      THREE.MathUtils.clamp(Math.abs(vLat) * 0.45 + Math.abs(d.speed) * 0.06, 2, 14),
-      { x: side.x * sign, z: side.z * sign, source: 'wall' }
-    );
+    if (mode === 'race') {
+      applyDamage(
+        racer,
+        THREE.MathUtils.clamp(Math.abs(vLat) * 0.45 + Math.abs(d.speed) * 0.06, 2, 14),
+        { x: side.x * sign, z: side.z * sign, source: 'wall' }
+      );
+    }
     const rvx = vx - vLat * side.x;
     const rvz = vz - vLat * side.z;
     d.speed = Math.sin(d.yaw) * rvx + Math.cos(d.yaw) * rvz;
@@ -3728,7 +3799,7 @@ function resolveRacerCollisions() {
             const speedRetention = THREE.MathUtils.clamp(1 - closingSpeed * 0.012, 0.84, 0.96);
             if (!a.wrecked) a.drive.speed *= speedRetention;
             if (!b.wrecked) b.drive.speed *= speedRetention;
-            if (closingSpeed > 4) {
+            if (closingSpeed > 4 && mode === 'race') {
               const impact = THREE.MathUtils.clamp(2 + closingSpeed * 0.28, 2, 14);
               applyDamage(a, impact, { x: mtv.x, z: mtv.z, source: 'car' });
               applyDamage(b, impact, { x: -mtv.x, z: -mtv.z, source: 'car' });
@@ -3936,20 +4007,8 @@ function updatePowerups(dt) {
         if (fuelAdded > 0) announcePickup(racer, 'fuel', 'FUEL', `+${Math.round(fuelAdded)}`);
         else announcePickup(racer, 'fuel', 'FUEL', 'FULL');
       } else if (pu.type === 'repair') {
-        const repair = Math.min(35, 100 - racer.health);
-        racer.health = Math.min(100, racer.health + 35);
-        if (repair > 0) {
-          racer.wrecked = false;
-          for (const zoneId of Object.keys(racer.bodyDamage || {})) {
-            racer.bodyDamage[zoneId] = Math.max(0, racer.bodyDamage[zoneId] - repair / 100);
-          }
-          if (racer.health >= 60) {
-            racer.brokenLampIndex = -1;
-            racer.brokenRearLamps?.clear();
-          }
-          syncVisualDamage(racer, true);
-        }
-        if (repair > 0) announcePickup(racer, 'repair', 'REPAIR', `+${Math.round(repair)}`);
+        const repaired = repairRacer(racer, 35);
+        if (repaired > 0) announcePickup(racer, 'repair', 'REPAIR', `+${Math.round(repaired)}`);
         else announcePickup(racer, 'repair', 'REPAIR', 'FULL');
       } else if (pu.type === 'nitro') {
         racer.nitroCharges = Math.min(NITRO_MAX, (racer.nitroCharges || 0) + 1);
@@ -3995,9 +4054,9 @@ function updateLap(racer) {
         racer.finished = true;
         racer.finishPlace = racers.filter((r) => r.finished).length;
         // Assign staggered parking / cooldown slot well beyond the finish line
-        const stopDistance = 22 + (racer.finishPlace * 10);
+        const stopDistance = 28 + (racer.finishPlace * 16);
         racer.finishTargetT = (stopDistance / LOOP_LEN) % 1;
-        racer.finishTargetLane = (racer.finishPlace % 2 === 0 ? 1 : -1) * (ROAD_WIDTH * 0.5 - 1.8);
+        racer.finishTargetLane = (racer.finishPlace % 2 === 0 ? 1 : -1) * 2.1;
         if (racer.isPlayer) {
           showFinish(racer.finishPlace);
         }
@@ -4138,8 +4197,11 @@ function updateAI(racer, dt) {
   if (racer.finished) {
     const d = racer.drive;
     const frac = (((progressAlongTrack(d.x, d.z) / LOOP_LEN) % 1) + 1) % 1;
-    const targetT = racer.finishTargetT !== undefined ? racer.finishTargetT : 0.025;
-    const targetLane = racer.finishTargetLane !== undefined ? racer.finishTargetLane : 2.5;
+    const targetT = racer.finishTargetT !== undefined ? racer.finishTargetT : 0.03;
+    const targetLane = racer.finishTargetLane !== undefined ? racer.finishTargetLane : 2.1;
+
+    const { p, tan, side } = frameAt(frac);
+    const trackYaw = Math.atan2(tan.x, tan.z);
 
     // Check if the car has arrived past its designated stopping slot
     const pastTarget = (frac >= targetT && frac < 0.2) || (frac >= 0.2 && frac < 0.85);
@@ -4150,20 +4212,26 @@ function updateAI(racer, dt) {
         d.x += Math.sin(d.yaw) * d.speed * dt;
         d.z += Math.cos(d.yaw) * d.speed * dt;
       }
+      let yawDiff = trackYaw - d.yaw;
+      while (yawDiff > Math.PI) yawDiff -= Math.PI * 2;
+      while (yawDiff < -Math.PI) yawDiff += Math.PI * 2;
+      d.yaw += yawDiff * (1 - Math.exp(-4 * dt));
+
+      resolveCollisions(racer);
       applyPose(racer, 0);
       updateVehicleEffects(racer, dt, false, d.speed > 0.1);
       return;
     }
 
     // Guide the car forward along the track into its parking slot past the finish line
-    d.speed = Math.max(6, d.speed - 10 * dt);
-    const { p, tan, side } = frameAt(frac);
-    let tx = p.x + tan.x * 12 + side.x * targetLane;
-    let tz = p.z + tan.z * 12 + side.z * targetLane;
+    d.speed = Math.max(5, d.speed - 10 * dt);
+    let tx = p.x + tan.x * 14 + side.x * targetLane;
+    let tz = p.z + tan.z * 14 + side.z * targetLane;
     steerToward(d, tx, tz, 2.4, dt);
 
     d.x += Math.sin(d.yaw) * d.speed * dt;
     d.z += Math.cos(d.yaw) * d.speed * dt;
+    resolveCollisions(racer);
     applyPose(racer, 0);
     updateVehicleEffects(racer, dt, false, true);
     return;
@@ -4209,9 +4277,8 @@ function updateAI(racer, dt) {
   const player = racers.find((entry) => entry.isPlayer);
   let catchUp = 1;
   if (player && !player.finished) {
-    const playerDistance = (player.lap - 1) * LOOP_LEN
-      + progressAlongTrack(player.drive.x, player.drive.z);
-    const aiDistance = (racer.lap - 1) * LOOP_LEN + progressAlongTrack(d.x, d.z);
+    const playerDistance = getRacerDistance(player);
+    const aiDistance = getRacerDistance(racer);
     const gapBehind = playerDistance - aiDistance;
     catchUp = gapBehind > 8
       ? THREE.MathUtils.clamp(1 + gapBehind / 650, 1, 1.19)
@@ -4323,12 +4390,27 @@ function applyPose(racer, steerInput) {
   if (racer.wheels.steerFr) racer.wheels.steerFr.rotation.y = ang;
 }
 
+function getRacerDistance(r) {
+  if (r.finished) {
+    return 1e9 - (r.finishPlace || 1);
+  }
+  const prog = progressAlongTrack(r.drive.x, r.drive.z);
+  const frac = (((prog / LOOP_LEN) % 1) + 1) % 1;
+
+  // On Lap 1 before reaching the middle of the track:
+  // If the car is behind the start line (in the grid zone frac > 0.70),
+  // its actual distance is negative relative to the start line (-40m, -20m, etc.)
+  if (r.lap <= 1 && !r.passedMid && frac > 0.70) {
+    return (frac - 1.0) * LOOP_LEN;
+  }
+
+  return (r.lap - 1) * LOOP_LEN + prog;
+}
+
 function raceStanding() {
   const scored = racers.map((r) => ({
     r,
-    score: r.finished
-      ? 1e9 - r.finishPlace
-      : (r.lap - 1) * LOOP_LEN + progressAlongTrack(r.drive.x, r.drive.z),
+    score: getRacerDistance(r),
   }));
   scored.sort((a, b) => b.score - a.score);
   return scored;
@@ -4406,23 +4488,53 @@ function updateCamera(dt) {
     return;
   }
 
-  // 3. Standard race chase camera
+  // 3. Race camera with smooth zoom animation between Chase and Inside Cockpit view
+  const blendRate = targetViewBlendT === 0 ? 1.6 : 2.4;
+  viewBlendT += (targetViewBlendT - viewBlendT) * (1 - Math.exp(-blendRate * dt));
+  if (Math.abs(viewBlendT - targetViewBlendT) < 0.001) viewBlendT = targetViewBlendT;
+  const ease = THREE.MathUtils.smoothstep(viewBlendT, 0, 1);
+
   if (cameraYaw === null) cameraYaw = player.drive.yaw;
   const yawDelta = Math.atan2(
     Math.sin(player.drive.yaw - cameraYaw),
     Math.cos(player.drive.yaw - cameraYaw)
   );
-  cameraYaw += yawDelta * (1 - Math.exp(-2.6 * dt));
-  // Position follows a softened heading, revealing the car's side in corners.
+  const yawFollowRate = 2.4 + ease * 4.5;
+  cameraYaw += yawDelta * (1 - Math.exp(-yawFollowRate * dt));
+
+  // Chase view world coordinates
   _q.setFromAxisAngle(_y, cameraYaw);
-  camPos.copy(camOffset).applyQuaternion(_q).add(player.mesh.position);
-  // Keep the focus aligned with the car itself so the wheels remain visible.
+  const chaseWorldPos = camOffset.clone().applyQuaternion(_q).add(player.mesh.position);
   _q.setFromAxisAngle(_y, player.drive.yaw);
-  lookPos.copy(camLook).applyQuaternion(_q).add(player.mesh.position);
-  // Lock the chase distance: smoothing position caused a speed-dependent zoom-out.
+  const chaseWorldLook = camLook.clone().applyQuaternion(_q).add(player.mesh.position);
+
+  // Cockpit view world coordinates
+  const cockpit = getCockpitOffset(player.def.id);
+  const cockpitWorldPos = cockpit.pos.clone().applyQuaternion(_q).add(player.mesh.position);
+  const steerAngle = (player.wheels?.steerFl?.rotation?.y || 0);
+  const lateralG = THREE.MathUtils.clamp((player.drive.speed * steerAngle) * 0.025, -0.05, 0.05);
+  cockpitWorldPos.x += Math.cos(player.drive.yaw) * lateralG;
+  cockpitWorldPos.z -= Math.sin(player.drive.yaw) * lateralG;
+
+  const cockpitLookTarget = cockpit.look.clone();
+  cockpitLookTarget.x += steerAngle * 6.0;
+  const cockpitWorldLook = cockpitLookTarget.applyQuaternion(_q).add(player.mesh.position);
+
+  // Smoothly blend position, height swoop arc, and look target
+  camPos.lerpVectors(chaseWorldPos, cockpitWorldPos, ease);
+  const arcHeight = Math.sin(ease * Math.PI) * 0.45;
+  camPos.y += arcHeight;
+  lookPos.lerpVectors(chaseWorldLook, cockpitWorldLook, ease);
+
   camera.position.copy(camPos);
-  const targetFov = THREE.MathUtils.lerp(CHASE_FOV, BOOST_FOV, speedFxIntensity);
-  chaseFov += (targetFov - chaseFov) * (1 - Math.exp(-7 * dt));
+
+  // Smoothly blend FOV with dynamic zoom punch
+  const chaseBaseFov = THREE.MathUtils.lerp(CHASE_FOV, BOOST_FOV, speedFxIntensity);
+  const cockpitBaseFov = THREE.MathUtils.lerp(COCKPIT_FOV, COCKPIT_BOOST_FOV, speedFxIntensity);
+  const targetFov = THREE.MathUtils.lerp(chaseBaseFov, cockpitBaseFov, ease);
+  const fovPunch = Math.sin(ease * Math.PI) * 3.0;
+  const fovBlendRate = targetViewBlendT === 0 ? 3.2 : 5.0;
+  chaseFov += ((targetFov + fovPunch) - chaseFov) * (1 - Math.exp(-fovBlendRate * dt));
   if (Math.abs(camera.fov - chaseFov) > 0.04) {
     camera.fov = chaseFov;
     camera.updateProjectionMatrix();
@@ -4436,21 +4548,64 @@ function updateFinishedRacers(dt) {
       r.drive.speed = Math.max(0, r.drive.speed - 14 * dt);
       r.drive.x += Math.sin(r.drive.yaw) * r.drive.speed * dt;
       r.drive.z += Math.cos(r.drive.yaw) * r.drive.speed * dt;
+      resolveCollisions(r);
       applyPose(r, 0);
-      updateVehicleEffects(r, dt, false, r.drive.speed > 0.5);
+      updateVehicleEffects(r, dt, false, r.drive.speed > 0.4);
     }
+  }
+  resolveRacerCollisions();
+  for (const r of racers) {
+    applyPose(r, 0);
   }
 }
 
 function resetPlayer() {
   const player = racers.find((r) => r.isPlayer);
   if (!player) return;
-  const s = gridStarts()[PLAYER_GRID_SLOT];
-  Object.assign(player.drive, { x: s.x, z: s.z, yaw: s.yaw, speed: 0 });
-  cameraYaw = s.yaw;
+
+  // Find trailing competitor who is still actively racing to spawn fairly in last place
+  const activeCompetitors = racers.filter((r) => !r.isPlayer && !r.finished);
+  let spawnDist = 0;
+  let spawnLap = player.lap || 1;
+
+  if (activeCompetitors.length > 0) {
+    let minScore = Infinity;
+    let trailingRacer = activeCompetitors[0];
+    for (const r of activeCompetitors) {
+      const dist = getRacerDistance(r);
+      if (dist < minScore) {
+        minScore = dist;
+        trailingRacer = r;
+      }
+    }
+    let targetTotalDist = minScore - 18;
+    if (targetTotalDist < 0) {
+      spawnLap = 1;
+      spawnDist = ((LOOP_LEN + (targetTotalDist % LOOP_LEN)) % LOOP_LEN);
+    } else {
+      spawnLap = Math.floor(targetTotalDist / LOOP_LEN) + 1;
+      spawnDist = targetTotalDist % LOOP_LEN;
+    }
+  } else {
+    const prog = progressAlongTrack(player.drive.x, player.drive.z);
+    spawnDist = Math.max(0, prog - 18);
+    spawnLap = player.lap || 1;
+  }
+
+  const frac = (((spawnDist / LOOP_LEN) % 1) + 1) % 1;
+  const { p, tan } = frameAt(frac);
+  const yaw = Math.atan2(tan.x, tan.z);
+
+  Object.assign(player.drive, { x: p.x, z: p.z, yaw, speed: 0 });
+  player.lap = Math.min(totalLaps, Math.max(1, spawnLap));
+  player.passedMid = frac > 0.45;
+  player.lastFrac = frac;
+  lapCountEl.textContent = String(player.lap);
+
+  cameraYaw = yaw;
   lossOrbitStart = null;
   finishCinematicStart = null;
-  player.health = 100;
+  repairRacer(player, 100);
   player.fuel = 100;
   player.wrecked = false;
   player.hitCooldown = 0;
@@ -4470,9 +4625,10 @@ function resetPlayer() {
     particle.life = 0;
     particle.mesh.visible = false;
   }
-  player.wp = Math.floor(WAYPOINTS.length * 0.99) % WAYPOINTS.length;
-  player.mesh.position.set(s.x, 0, s.z);
-  player.mesh.rotation.y = s.yaw;
+  player.wp = Math.floor(frac * WAYPOINTS.length) % WAYPOINTS.length;
+  player.mesh.position.set(p.x, 0, p.z);
+  player.mesh.rotation.y = yaw;
+  updatePlaceHud();
 }
 
 function showMenu() {
@@ -4488,6 +4644,9 @@ function showMenu() {
   clearRacers();
   updateSpeedometer(0, false);
   speedFxIntensity = 0;
+  cameraView = 'chase';
+  viewBlendT = 0;
+  targetViewBlendT = 0;
   chaseFov = CHASE_FOV;
   setSpeedFxOverlay(0);
   if (pickupToastEl) pickupToastEl.classList.remove('on', 'pop', ...TOAST_KINDS);
