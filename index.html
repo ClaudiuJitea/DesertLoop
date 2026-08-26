@@ -1066,6 +1066,7 @@
       position: absolute;
       top: 56px;
       left: 22px;
+      z-index: 20;
       pointer-events: auto;
       background: linear-gradient(180deg, rgba(32, 38, 46, 0.94), rgba(20, 24, 30, 0.94));
       border: 1px solid rgba(243, 236, 220, 0.14);
@@ -1711,14 +1712,14 @@
       place-items: center;
       background: rgba(26, 31, 38, 0.18);
       backdrop-filter: none;
-      pointer-events: auto;
+      pointer-events: none;
     }
     #finish.show { display: grid; }
     #finish.loss {
       align-items: end;
       background: rgba(26, 31, 38, 0.12);
       backdrop-filter: none;
-      pointer-events: auto;
+      pointer-events: none;
     }
     #finish .card {
       background: var(--cream);
@@ -1727,6 +1728,7 @@
       text-align: center;
       max-width: 420px;
       animation: rise 0.4s ease both;
+      pointer-events: auto;
     }
     #finish.loss .card {
       margin: 0 0 22px;

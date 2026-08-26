@@ -297,9 +297,11 @@ class RadioManager {
     if (!st.src) {
       this.currentIndex = 0;
       this.muted = false;
+      if (this.volume <= 0) this.volume = 0.55;
       try {
         localStorage.setItem('desert_loop_radio_index', '0');
         localStorage.setItem('desert_loop_radio_muted', 'false');
+        localStorage.setItem('desert_loop_radio_vol', String(this.volume));
       } catch (e) {}
       this.applyStation(true);
       if (mode === 'race' || mode === 'countdown') {
@@ -309,12 +311,19 @@ class RadioManager {
       return;
     }
     this.muted = !this.muted;
+    if (!this.muted && this.volume <= 0) {
+      this.volume = 0.55;
+    }
     try {
       localStorage.setItem('desert_loop_radio_muted', String(this.muted));
+      localStorage.setItem('desert_loop_radio_vol', String(this.volume));
     } catch (e) {}
     if (this.muted) {
       this.audio.pause();
     } else {
+      if (!this.audio.src || !this.audio.src.includes(st.src)) {
+        this.audio.src = st.src;
+      }
       this.audio.volume = this.volume;
       this.audio.play().catch(() => {});
     }
