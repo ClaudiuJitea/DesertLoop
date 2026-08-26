@@ -3755,8 +3755,10 @@ function racerObbMtv(a, b) {
     const aSide = Math.abs(Math.cos(ad.yaw) * axis.x - Math.sin(ad.yaw) * axis.z);
     const bForward = Math.abs(Math.sin(bd.yaw) * axis.x + Math.cos(bd.yaw) * axis.z);
     const bSide = Math.abs(Math.cos(bd.yaw) * axis.x - Math.sin(bd.yaw) * axis.z);
-    const radiusA = (ad.halfL + 0.1) * aForward + (ad.halfW + 0.08) * aSide;
-    const radiusB = (bd.halfL + 0.1) * bForward + (bd.halfW + 0.08) * bSide;
+    const extraL = (mode === 'finish' || a.finished || b.finished) ? 0.65 : 0.1;
+    const extraW = (mode === 'finish' || a.finished || b.finished) ? 0.35 : 0.08;
+    const radiusA = (ad.halfL + extraL) * aForward + (ad.halfW + extraW) * aSide;
+    const radiusB = (bd.halfL + extraL) * bForward + (bd.halfW + extraW) * bSide;
     const signedDistance = deltaX * axis.x + deltaZ * axis.z;
     const overlap = radiusA + radiusB - Math.abs(signedDistance);
     if (overlap <= 0) return null;
@@ -4063,7 +4065,7 @@ function updateLap(racer) {
         racer.finished = true;
         racer.finishPlace = racers.filter((r) => r.finished).length;
         // Assign staggered parking / cooldown slot well beyond the finish line
-        const stopDistance = 28 + (racer.finishPlace * 16);
+        const stopDistance = 30 + (racer.finishPlace * 18);
         racer.finishTargetT = (stopDistance / LOOP_LEN) % 1;
         racer.finishTargetLane = (racer.finishPlace % 2 === 0 ? 1 : -1) * 2.1;
         if (racer.isPlayer) {
@@ -4212,11 +4214,25 @@ function updateAI(racer, dt) {
     const { p, tan, side } = frameAt(frac);
     const trackYaw = Math.atan2(tan.x, tan.z);
 
-    // Check if the car has arrived past its designated stopping slot
-    const pastTarget = (frac >= targetT && frac < 0.2) || (frac >= 0.2 && frac < 0.85);
+    // Active proximity check: brake early if another car is stopped ahead
+    let carAheadDist = Infinity;
+    for (const other of racers) {
+      if (other === racer || !other.drive) continue;
+      const od = other.drive;
+      const dx = od.x - d.x;
+      const dz = od.z - d.z;
+      const fwdDist = dx * Math.sin(d.yaw) + dz * Math.cos(d.yaw);
+      const latDist = Math.abs(-dx * Math.cos(d.yaw) + dz * Math.sin(d.yaw));
+      if (fwdDist > 0 && fwdDist < 18 && latDist < 2.2) {
+        if (fwdDist < carAheadDist) carAheadDist = fwdDist;
+      }
+    }
 
-    if (pastTarget || d.speed <= 0.6) {
-      d.speed = Math.max(0, d.speed - 16 * dt);
+    // Check if the car has arrived past its designated stopping slot or is too close to a car ahead
+    const pastTarget = (frac >= targetT && frac < 0.25) || (frac >= 0.25 && frac < 0.85);
+
+    if (pastTarget || d.speed <= 0.4 || carAheadDist < 6.5) {
+      d.speed = Math.max(0, d.speed - 22 * dt);
       if (d.speed > 0) {
         d.x += Math.sin(d.yaw) * d.speed * dt;
         d.z += Math.cos(d.yaw) * d.speed * dt;
@@ -4224,7 +4240,7 @@ function updateAI(racer, dt) {
       let yawDiff = trackYaw - d.yaw;
       while (yawDiff > Math.PI) yawDiff -= Math.PI * 2;
       while (yawDiff < -Math.PI) yawDiff += Math.PI * 2;
-      d.yaw += yawDiff * (1 - Math.exp(-4 * dt));
+      d.yaw += yawDiff * (1 - Math.exp(-6 * dt));
 
       resolveCollisions(racer);
       applyPose(racer, 0);
@@ -4233,10 +4249,15 @@ function updateAI(racer, dt) {
     }
 
     // Guide the car forward along the track into its parking slot past the finish line
-    d.speed = Math.max(5, d.speed - 10 * dt);
+    if (carAheadDist < 12.0) {
+      d.speed = Math.max(0, d.speed - 18 * dt);
+    } else {
+      d.speed = Math.max(4, d.speed - 12 * dt);
+    }
+
     let tx = p.x + tan.x * 14 + side.x * targetLane;
     let tz = p.z + tan.z * 14 + side.z * targetLane;
-    steerToward(d, tx, tz, 2.4, dt);
+    steerToward(d, tx, tz, 2.6, dt);
 
     d.x += Math.sin(d.yaw) * d.speed * dt;
     d.z += Math.cos(d.yaw) * d.speed * dt;
@@ -4553,15 +4574,66 @@ function updateCamera(dt) {
 
 function updateFinishedRacers(dt) {
   for (const r of racers) {
-    if (r.drive && r.drive.speed > 0) {
-      r.drive.speed = Math.max(0, r.drive.speed - 14 * dt);
-      r.drive.x += Math.sin(r.drive.yaw) * r.drive.speed * dt;
-      r.drive.z += Math.cos(r.drive.yaw) * r.drive.speed * dt;
+    if (!r.drive) continue;
+    const d = r.drive;
+    const frac = (((progressAlongTrack(d.x, d.z) / LOOP_LEN) % 1) + 1) % 1;
+    const targetT = r.finishTargetT !== undefined ? r.finishTargetT : 0.03;
+    const targetLane = r.finishTargetLane !== undefined ? r.finishTargetLane : 2.1;
+
+    const { p, tan, side } = frameAt(frac);
+    const trackYaw = Math.atan2(tan.x, tan.z);
+
+    // Active proximity check: stop or brake early if another car is stopped or close ahead
+    let carAheadDist = Infinity;
+    for (const other of racers) {
+      if (other === r || !other.drive) continue;
+      const od = other.drive;
+      const dx = od.x - d.x;
+      const dz = od.z - d.z;
+      const fwdDist = dx * Math.sin(d.yaw) + dz * Math.cos(d.yaw);
+      const latDist = Math.abs(-dx * Math.cos(d.yaw) + dz * Math.sin(d.yaw));
+      if (fwdDist > 0 && fwdDist < 18 && latDist < 2.2) {
+        if (fwdDist < carAheadDist) carAheadDist = fwdDist;
+      }
+    }
+
+    const pastTarget = (frac >= targetT && frac < 0.25) || (frac >= 0.25 && frac < 0.85);
+
+    if (pastTarget || d.speed <= 0.4 || carAheadDist < 6.5) {
+      d.speed = Math.max(0, d.speed - 22 * dt);
+      if (d.speed > 0) {
+        d.x += Math.sin(d.yaw) * d.speed * dt;
+        d.z += Math.cos(d.yaw) * d.speed * dt;
+      }
+      let yawDiff = trackYaw - d.yaw;
+      while (yawDiff > Math.PI) yawDiff -= Math.PI * 2;
+      while (yawDiff < -Math.PI) yawDiff += Math.PI * 2;
+      d.yaw += yawDiff * (1 - Math.exp(-6 * dt));
+
       resolveCollisions(r);
       applyPose(r, 0);
-      updateVehicleEffects(r, dt, false, r.drive.speed > 0.4);
+      updateVehicleEffects(r, dt, false, d.speed > 0.1);
+      continue;
     }
+
+    // Guide the car forward along the track into its assigned parking lane & slot
+    if (carAheadDist < 12.0) {
+      d.speed = Math.max(0, d.speed - 18 * dt);
+    } else {
+      d.speed = Math.max(4, d.speed - 12 * dt);
+    }
+
+    let tx = p.x + tan.x * 14 + side.x * targetLane;
+    let tz = p.z + tan.z * 14 + side.z * targetLane;
+    steerToward(d, tx, tz, 2.6, dt);
+
+    d.x += Math.sin(d.yaw) * d.speed * dt;
+    d.z += Math.cos(d.yaw) * d.speed * dt;
+    resolveCollisions(r);
+    applyPose(r, 0);
+    updateVehicleEffects(r, dt, false, d.speed > 0.2);
   }
+
   resolveRacerCollisions();
   for (const r of racers) {
     applyPose(r, 0);
