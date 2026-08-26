@@ -137,7 +137,7 @@ function posGeo(pos) {
 
 // ---- bake + merge (SNIPPETS standard skeleton) ----
 function prep(geo, hex) {
-  geo = geo.toNonIndexed();
+  if (geo.index) geo = geo.toNonIndexed();
   geo.deleteAttribute('uv');
   geo.deleteAttribute('normal');
   const c = new THREE.Color(hex);

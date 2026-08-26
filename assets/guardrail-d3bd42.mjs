@@ -179,7 +179,7 @@ export function createAsset(opts = {}) {
   const ZC = -0.11;
   const geos = parts.map(({ g, c }) => {
     if (ZC) g.translate(0, 0, ZC);
-    g = g.toNonIndexed();
+    if (g.index) g = g.toNonIndexed();
     g.deleteAttribute('uv');
     g.deleteAttribute('normal');
     const col = new THREE.Color(c);

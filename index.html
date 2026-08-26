@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Desert Loop</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏎️</text></svg>">
   <script type="importmap">
   {
     "imports": {
@@ -616,8 +617,8 @@
     }
     .feature-stats strong { color: #f28657; font-size: 23px; }
     .intro-dock {
-      min-height: 142px;
-      grid-template-columns: minmax(0, 1fr) 190px;
+      min-height: 156px;
+      grid-template-columns: minmax(0, 1fr) 205px;
       align-items: stretch;
       padding: 10px;
       border-radius: 14px;
@@ -680,6 +681,7 @@
       justify-content: space-between;
       padding: 4px;
       min-width: 0;
+      gap: 6px;
     }
     .intro-actions::before {
       content: "Race setup";
@@ -693,21 +695,45 @@
       border-radius: 8px;
     }
     .btn.primary {
-      padding-block: 14px;
+      padding-block: 12px;
       box-shadow: 0 10px 24px rgba(196, 90, 44, 0.24);
     }
+    .track-pick,
     .laps-pick {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      opacity: 0.85;
       color: rgba(243, 236, 220, 0.7);
     }
+    .track-pick .track-btns,
+    .laps-pick .lap-btns { display: flex; gap: 4px; }
+    .track-pick button,
     .laps-pick button {
-      color: var(--cream);
-      border-color: rgba(255, 255, 255, 0.15);
+      appearance: none;
+      border: 1px solid rgba(255, 255, 255, 0.15);
       background: rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      padding: 6px 8px;
+      cursor: pointer;
+      font: inherit;
+      font-size: 10px;
+      color: var(--cream);
+      transition: transform 0.15s, background 0.15s, border-color 0.15s;
+      white-space: nowrap;
     }
+    .track-pick button:hover,
+    .laps-pick button:hover { transform: translateY(-1px); border-color: var(--accent); }
+    .track-pick button.on,
     .laps-pick button.on {
       color: var(--ink);
       border-color: var(--cream);
       background: var(--cream);
+      font-weight: 700;
     }
     .menu-hint {
       position: absolute;
@@ -877,6 +903,347 @@
       padding: 10px 14px;
       border-radius: 10px;
       backdrop-filter: blur(6px);
+    }
+
+    /* —— Radio UI —— */
+    .menu-radio {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      padding: 5px 12px 6px 10px;
+      background: rgba(26, 31, 38, 0.07);
+      border: 1px solid rgba(26, 31, 38, 0.14);
+      border-radius: 14px;
+      backdrop-filter: blur(8px);
+      font-size: 11px;
+      width: 252px;
+      box-sizing: border-box;
+      flex-shrink: 0;
+    }
+    .menu-radio-row {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      width: 100%;
+    }
+    .menu-radio-icon {
+      font-size: 14px;
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+    }
+    .menu-radio-info {
+      display: flex;
+      flex-direction: column;
+      line-height: 1.15;
+      flex: 1;
+      min-width: 0;
+    }
+    .menu-radio-label {
+      font-size: 8.5px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
+    .menu-radio-track {
+      font-weight: 600;
+      color: var(--ink);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .menu-radio-ctrls {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      margin-left: 4px;
+      flex-shrink: 0;
+    }
+    .menu-radio-btn {
+      appearance: none;
+      border: 1px solid rgba(26, 31, 38, 0.15);
+      background: rgba(255, 255, 255, 0.65);
+      color: var(--ink);
+      border-radius: 6px;
+      width: 24px;
+      height: 24px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 10px;
+      padding: 0;
+      transition: background 0.15s, transform 0.12s, border-color 0.15s;
+    }
+    .menu-radio-btn:hover {
+      background: #fff;
+      border-color: var(--accent);
+      transform: translateY(-1px);
+    }
+    .menu-radio-btn:active {
+      transform: translateY(0);
+    }
+    .menu-radio.muted .icon-sound,
+    .menu-radio.off .icon-sound {
+      display: none;
+    }
+    .menu-radio:not(.muted):not(.off) .icon-muted {
+      display: none;
+    }
+
+    /* Volume Slider */
+    .menu-radio-vol-row,
+    .radio-vol-row {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      width: 100%;
+      margin-top: 2px;
+      padding-top: 3px;
+      border-top: 1px solid rgba(26, 31, 38, 0.08);
+    }
+    .radio-hud .radio-vol-row {
+      border-top-color: rgba(243, 236, 220, 0.08);
+      margin-top: 4px;
+      padding-top: 4px;
+    }
+    .radio-vol-icon {
+      flex-shrink: 0;
+      opacity: 0.6;
+      color: inherit;
+    }
+    .radio-vol-slider {
+      appearance: none;
+      -webkit-appearance: none;
+      width: 100%;
+      height: 3px;
+      border-radius: 2px;
+      background: rgba(26, 31, 38, 0.15);
+      outline: none;
+      cursor: pointer;
+      margin: 0;
+      transition: background 0.15s;
+    }
+    .radio-hud .radio-vol-slider {
+      background: rgba(243, 236, 220, 0.18);
+    }
+    .radio-vol-slider::-webkit-slider-thumb {
+      appearance: none;
+      -webkit-appearance: none;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+      transition: transform 0.12s, background 0.15s;
+    }
+    .radio-vol-slider::-moz-range-thumb {
+      width: 10px;
+      height: 10px;
+      border: none;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+    }
+    .radio-vol-slider:hover::-webkit-slider-thumb {
+      transform: scale(1.25);
+    }
+    .radio-vol-val {
+      font-size: 8.5px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      opacity: 0.65;
+      min-width: 24px;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* HUD Radio Panel */
+    .radio-hud {
+      position: absolute;
+      top: 56px;
+      left: 22px;
+      pointer-events: auto;
+      background: linear-gradient(180deg, rgba(32, 38, 46, 0.94), rgba(20, 24, 30, 0.94));
+      border: 1px solid rgba(243, 236, 220, 0.14);
+      border-left: 3px solid var(--accent);
+      border-radius: 10px;
+      box-shadow: 0 8px 24px rgba(26, 31, 38, 0.25);
+      color: #f3ecdc;
+      padding: 7px 12px 6px 10px;
+      width: 252px;
+      box-sizing: border-box;
+      backdrop-filter: blur(10px);
+      transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+    .radio-body {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .radio-eq {
+      display: flex;
+      align-items: flex-end;
+      gap: 2.5px;
+      width: 16px;
+      height: 18px;
+      flex-shrink: 0;
+      padding-bottom: 1px;
+    }
+    .radio-eq .bar {
+      width: 2.5px;
+      border-radius: 1px;
+      background: var(--accent);
+      display: block;
+      height: 3px;
+      transition: height 0.2s ease, opacity 0.2s ease;
+    }
+    .radio-eq.playing .bar-1 { animation: eq-bounce-1 0.65s ease-in-out infinite alternate; }
+    .radio-eq.playing .bar-2 { animation: eq-bounce-2 0.5s ease-in-out infinite alternate; }
+    .radio-eq.playing .bar-3 { animation: eq-bounce-3 0.7s ease-in-out infinite alternate; }
+    .radio-eq.playing .bar-4 { animation: eq-bounce-4 0.58s ease-in-out infinite alternate; }
+    .radio-eq.off .bar,
+    .radio-eq.muted .bar {
+      height: 3px;
+      animation: none;
+      opacity: 0.35;
+      background: #a0998c;
+    }
+
+    @keyframes eq-bounce-1 {
+      0% { height: 3px; }
+      100% { height: 16px; }
+    }
+    @keyframes eq-bounce-2 {
+      0% { height: 14px; }
+      100% { height: 4px; }
+    }
+    @keyframes eq-bounce-3 {
+      0% { height: 5px; }
+      100% { height: 17px; }
+    }
+    @keyframes eq-bounce-4 {
+      0% { height: 16px; }
+      100% { height: 4px; }
+    }
+
+    .radio-meta {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      flex: 1;
+    }
+    .radio-meta-top {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      line-height: 1;
+      margin-bottom: 3px;
+    }
+    .radio-freq-badge {
+      font-family: "DM Sans", sans-serif;
+      font-size: 9.5px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      color: #f28657;
+      text-transform: uppercase;
+      flex-shrink: 0;
+    }
+    .radio-tag {
+      font-size: 8px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      padding: 1px 5px;
+      border-radius: 3px;
+      background: rgba(243, 236, 220, 0.12);
+      color: rgba(243, 236, 220, 0.65);
+      flex-shrink: 0;
+    }
+    .radio-title {
+      font-family: "DM Sans", sans-serif;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      color: #fff8f0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      min-width: 0;
+    }
+    .radio-actions {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+    .radio-action-btn {
+      appearance: none;
+      border: 1px solid rgba(243, 236, 220, 0.16);
+      background: rgba(255, 255, 255, 0.08);
+      color: #f3ecdc;
+      border-radius: 6px;
+      width: 24px;
+      height: 24px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 10px;
+      padding: 0;
+      transition: background 0.15s, border-color 0.15s, transform 0.12s;
+    }
+    .radio-action-btn:hover {
+      background: rgba(255, 255, 255, 0.2);
+      border-color: rgba(243, 236, 220, 0.4);
+      transform: translateY(-1px);
+    }
+    .radio-action-btn:active {
+      transform: translateY(0);
+    }
+    .radio-hud.muted .icon-sound,
+    .radio-hud.off .icon-sound {
+      display: none;
+    }
+    .radio-hud:not(.muted):not(.off) .icon-muted {
+      display: none;
+    }
+    .radio-hint {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 5px;
+      padding-top: 4px;
+      border-top: 1px solid rgba(243, 236, 220, 0.08);
+      font-size: 8.5px;
+      letter-spacing: 0.06em;
+      color: rgba(243, 236, 220, 0.5);
+      text-transform: uppercase;
+    }
+    .radio-hint kbd {
+      font-family: inherit;
+      background: rgba(243, 236, 220, 0.12);
+      border: 1px solid rgba(243, 236, 220, 0.2);
+      border-radius: 3px;
+      padding: 0 3px;
+      font-weight: 700;
+      color: #fff8f0;
+    }
+    @media (max-width: 680px) {
+      .menu-radio {
+        width: 190px;
+        padding: 4px 8px 4px 6px;
+        gap: 6px;
+      }
+      .radio-hud {
+        top: 46px;
+        left: 14px;
+        padding: 5px 8px 4px;
+        width: 190px;
+      }
+      .radio-hint { display: none; }
     }
     #lap {
       position: absolute;
@@ -1080,6 +1447,7 @@
     #pickupToast.impact { --toast: #d45b52; }
     #pickupToast.empty { --toast: #c46a3c; }
     #pickupToast.nitro { --toast: #b44cff; }
+    #pickupToast.radio { --toast: #e4572e; }
     @keyframes toast-in {
       from { transform: translateX(-50%) translateY(-8px); opacity: 0; }
       to { transform: translateX(-50%) translateY(0); opacity: 1; }
@@ -1238,18 +1606,22 @@
     }
     #nitroHud .nitro-pips {
       display: flex;
+      flex: 1;
       gap: 6px;
     }
     #nitroHud .nitro-pip {
-      width: 34px;
+      flex: 1;
       height: 10px;
       border-radius: 999px;
       background: rgba(8, 10, 12, 0.55);
+      border: 1px solid rgba(243, 236, 220, 0.12);
       box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+      transition: background 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
     }
     #nitroHud .nitro-pip.on {
       background: linear-gradient(90deg, #c46bff, #7a28e0);
-      box-shadow: 0 0 10px rgba(180, 76, 255, 0.35);
+      border-color: rgba(210, 140, 255, 0.55);
+      box-shadow: 0 0 10px rgba(180, 76, 255, 0.45);
     }
     #nitroHud .nitro-key {
       min-width: 22px;
@@ -1337,8 +1709,8 @@
       z-index: 8;
       display: none;
       place-items: center;
-      background: rgba(26, 31, 38, 0.45);
-      backdrop-filter: blur(4px);
+      background: rgba(26, 31, 38, 0.18);
+      backdrop-filter: none;
       pointer-events: auto;
     }
     #finish.show { display: grid; }
@@ -1380,6 +1752,28 @@
         <span class="menu-mark-icon">DL</span>
         <span>Desert Loop Racing</span>
       </div>
+      <div class="menu-radio" id="introRadio">
+        <div class="menu-radio-row">
+          <span class="menu-radio-icon">📻</span>
+          <div class="menu-radio-info">
+            <span class="menu-radio-label">RADIO</span>
+            <span class="menu-radio-track" id="introRadioTrack">Neon Night (94.2 FM)</span>
+          </div>
+          <div class="menu-radio-ctrls">
+            <button type="button" class="menu-radio-btn" id="introRadioPrev" title="Previous Station" aria-label="Previous station">◀</button>
+            <button type="button" class="menu-radio-btn" id="introRadioToggle" title="Toggle Radio" aria-label="Toggle radio">
+              <svg class="icon-sound" viewBox="0 0 24 24" width="13" height="13"><path fill="currentColor" d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+              <svg class="icon-muted" viewBox="0 0 24 24" width="13" height="13"><path fill="currentColor" d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3 3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>
+            </button>
+            <button type="button" class="menu-radio-btn" id="introRadioNext" title="Next Station" aria-label="Next station">▶</button>
+          </div>
+        </div>
+        <div class="menu-radio-vol-row">
+          <svg class="radio-vol-icon" viewBox="0 0 24 24" width="11" height="11" aria-hidden="true"><path fill="currentColor" d="M3 9v6h4l5 5V4L7 9H3zm11 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
+          <input type="range" id="introRadioVolume" class="radio-vol-slider" min="0" max="1" step="0.01" value="0.55" aria-label="Volume">
+          <span class="radio-vol-val" id="introRadioVolNum">55%</span>
+        </div>
+      </div>
       <div class="menu-status">
         <span>Circuit online</span>
         <span>Season 01 · Day race</span>
@@ -1414,7 +1808,7 @@
         <div class="hero-badges">
           <span>8 racers</span>
           <span>Boost pads</span>
-          <span>1,640 m circuit</span>
+          <span id="trackLengthBadge">1,820 m circuit</span>
         </div>
       </header>
       <div class="intro-feature">
@@ -1435,6 +1829,13 @@
         <div class="garage" id="garage"></div>
         <div class="intro-actions">
           <button class="btn primary" id="raceBtn" type="button">Start race</button>
+          <div class="track-pick">
+            <span>Track</span>
+            <div class="track-btns">
+              <button type="button" data-track="american-desert" class="on" title="American Desert Canyon">Desert</button>
+              <button type="button" data-track="city" title="City Circuit">City</button>
+            </div>
+          </div>
           <div class="laps-pick">
             <span>Laps</span>
             <div class="lap-btns">
@@ -1445,7 +1846,7 @@
         </div>
       </div>
     </div>
-    <div class="menu-hint">Select car · Choose laps · Start race</div>
+    <div class="menu-hint">Select car · Choose track & laps · Start race</div>
   </div>
 
   <div id="countdown"></div>
@@ -1456,7 +1857,41 @@
       <div class="speed-lines"></div>
       <div class="speed-warp"></div>
     </div>
-    <div id="title">Desert Loop</div>
+    <div id="title">American Desert</div>
+    <div id="radioHud" class="panel radio-hud" aria-label="Desert Loop Radio">
+      <div class="radio-body">
+        <div class="radio-eq" id="radioEq" aria-hidden="true">
+          <span class="bar bar-1"></span>
+          <span class="bar bar-2"></span>
+          <span class="bar bar-3"></span>
+          <span class="bar bar-4"></span>
+        </div>
+        <div class="radio-meta">
+          <div class="radio-meta-top">
+            <span class="radio-freq-badge" id="radioFreqBadge">94.2 FM</span>
+            <span class="radio-tag" id="radioTag">RADIO</span>
+          </div>
+          <div class="radio-title" id="radioTitle">Neon Night</div>
+        </div>
+        <div class="radio-actions">
+          <button type="button" class="radio-action-btn" id="radioPrevBtn" title="Previous station ([)" aria-label="Previous station">◀</button>
+          <button type="button" class="radio-action-btn radio-toggle-btn" id="radioToggleBtn" title="Mute / Power (M)" aria-label="Mute / Unmute radio">
+            <svg class="icon-sound" viewBox="0 0 24 24" width="13" height="13"><path fill="currentColor" d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+            <svg class="icon-muted" viewBox="0 0 24 24" width="13" height="13"><path fill="currentColor" d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3 3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>
+          </button>
+          <button type="button" class="radio-action-btn" id="radioNextBtn" title="Next station (T or ])" aria-label="Next station">▶</button>
+        </div>
+      </div>
+      <div class="radio-vol-row">
+        <svg class="radio-vol-icon" viewBox="0 0 24 24" width="10" height="10" aria-hidden="true"><path fill="currentColor" d="M3 9v6h4l5 5V4L7 9H3zm11 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
+        <input type="range" id="radioVolume" class="radio-vol-slider" min="0" max="1" step="0.01" value="0.55" aria-label="Volume">
+        <span class="radio-vol-val" id="radioVolNum">55%</span>
+      </div>
+      <div class="radio-hint">
+        <span><kbd>T</kbd> Next</span>
+        <span><kbd>M</kbd> Mute</span>
+      </div>
+    </div>
     <div id="place" class="panel">1st</div>
     <div id="lap" class="panel">Lap <span class="num" id="lapCount">1</span> / <span id="lapTotal">3</span></div>
     <div id="speedo" aria-label="Speedometer">
@@ -1493,6 +1928,7 @@
       </div>
       <div class="nitro-row">
         <div class="nitro-pips" id="nitroPips">
+          <span class="nitro-pip"></span>
           <span class="nitro-pip"></span>
           <span class="nitro-pip"></span>
         </div>

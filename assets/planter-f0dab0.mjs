@@ -264,7 +264,8 @@ export function createAsset(userParams = {}) {
   const shrubGroup = new THREE.Group();
   shrubGroup.name = 'shrub';
   const detail = FACET_DETAIL[p.shrubFacets] ?? 1;
-  const geo = lobe(0.14, detail, 17, 0.08).toNonIndexed();
+  const lobeGeo = lobe(0.14, detail, 17, 0.08);
+  const geo = lobeGeo.index ? lobeGeo.toNonIndexed() : lobeGeo;
   geo.applyMatrix4(new THREE.Matrix4().makeScale(1, 0.94, 0.96));
   geo.computeBoundingBox();
   const bb = geo.boundingBox;

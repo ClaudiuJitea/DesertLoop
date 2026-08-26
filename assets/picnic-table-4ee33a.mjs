@@ -242,7 +242,7 @@ export function createAsset(opts = {}) {
   }
 
   const geos = parts.map(({ g, c }) => {
-    const geo = g.toNonIndexed();
+    const geo = g.index ? g.toNonIndexed() : g;
     geo.deleteAttribute('uv');
     geo.deleteAttribute('normal');
     const col = new THREE.Color(c);

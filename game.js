@@ -16,10 +16,11 @@ import { createAsset as createRockSpire } from './assets/rock-spire-13819c.mjs';
 import { createAsset as createRock } from './assets/medium-rock-e08405.mjs';
 import { createAsset as createFence } from './assets/wooden-fence-section-5f04b7.mjs';
 import { createAsset as createSign } from './assets/sandwich-board-sign-cb5e7c.mjs';
+import { createAsset as createSeagrass } from './assets/seagrass-tuft-862cc5.mjs';
 
 const TOTAL_LAPS_DEFAULT = 3;
 const ROAD_WIDTH = 11;
-const NITRO_MAX = 2;
+const NITRO_MAX = 3;
 const NITRO_DURATION = 5;
 const FOG_COLOR = 0xf3ecdc;
 const FOG_NEAR = 210;
@@ -120,10 +121,275 @@ const nitroHudEl = document.getElementById('nitroHud');
 const nitroValueEl = document.getElementById('nitroValue');
 const nitroPipsEl = document.getElementById('nitroPips');
 
+const introRadioEl = document.getElementById('introRadio');
+const introRadioTrackEl = document.getElementById('introRadioTrack');
+const introRadioPrevBtn = document.getElementById('introRadioPrev');
+const introRadioToggleBtn = document.getElementById('introRadioToggle');
+const introRadioNextBtn = document.getElementById('introRadioNext');
+const introRadioVolumeEl = document.getElementById('introRadioVolume');
+const introRadioVolNumEl = document.getElementById('introRadioVolNum');
+
+const radioHudEl = document.getElementById('radioHud');
+const radioEqEl = document.getElementById('radioEq');
+const radioFreqBadgeEl = document.getElementById('radioFreqBadge');
+const radioTagEl = document.getElementById('radioTag');
+const radioTitleEl = document.getElementById('radioTitle');
+const radioPrevBtn = document.getElementById('radioPrevBtn');
+const radioToggleBtn = document.getElementById('radioToggleBtn');
+const radioNextBtn = document.getElementById('radioNextBtn');
+const radioVolumeEl = document.getElementById('radioVolume');
+const radioVolNumEl = document.getElementById('radioVolNum');
+
+// —— Radio system ——
+const RADIO_STATIONS = [
+  {
+    id: 'neon-night',
+    name: 'Neon Night',
+    freq: '94.2 FM',
+    genre: 'Synthwave',
+    src: './sounds/radio/Neon Night.mp3',
+  },
+  {
+    id: 'neon-velocity',
+    name: 'Neon Velocity',
+    freq: '106.8 FM',
+    genre: 'Cyber Beat',
+    src: './sounds/radio/Neon Velocity.mp3',
+  },
+  {
+    id: 'off',
+    name: 'Radio Off',
+    freq: 'OFF',
+    genre: 'Muted',
+    src: null,
+  },
+];
+
+class RadioManager {
+  constructor() {
+    let savedIndex = 0;
+    let savedMuted = false;
+    let savedVol = 0.55;
+    try {
+      const idxStr = localStorage.getItem('desert_loop_radio_index');
+      if (idxStr !== null) {
+        const parsed = parseInt(idxStr, 10);
+        if (!isNaN(parsed) && parsed >= 0 && parsed < RADIO_STATIONS.length) {
+          savedIndex = parsed;
+        }
+      }
+      savedMuted = localStorage.getItem('desert_loop_radio_muted') === 'true';
+      const volStr = localStorage.getItem('desert_loop_radio_vol');
+      if (volStr !== null) {
+        const parsedVol = parseFloat(volStr);
+        if (!isNaN(parsedVol) && parsedVol >= 0 && parsedVol <= 1) {
+          savedVol = parsedVol;
+        }
+      }
+    } catch (e) {}
+
+    this.currentIndex = savedIndex;
+    this.muted = savedMuted;
+    this.volume = savedVol;
+    this.audio = new Audio();
+    this.audio.loop = true;
+    this.audio.volume = this.muted ? 0 : this.volume;
+    this.audio.preload = 'auto';
+    this.unlocked = false;
+
+    this.audio.addEventListener('play', () => this.updateUI());
+    this.audio.addEventListener('pause', () => this.updateUI());
+    this.audio.addEventListener('ended', () => this.updateUI());
+
+    const unlock = () => {
+      if (this.unlocked) return;
+      this.unlocked = true;
+      removeEventListener('pointerdown', unlock);
+      removeEventListener('keydown', unlock);
+      if (!this.muted && this.currentStation.src && this.audio.paused) {
+        this.audio.volume = this.volume;
+        this.audio.play().catch(() => {});
+      }
+    };
+    addEventListener('pointerdown', unlock, { passive: true });
+    addEventListener('keydown', unlock, { passive: true });
+
+    this.applyStation(false);
+  }
+
+  get currentStation() {
+    return RADIO_STATIONS[this.currentIndex] || RADIO_STATIONS[0];
+  }
+
+  setVolume(vol) {
+    this.volume = Math.max(0, Math.min(1, vol));
+    if (this.muted && this.volume > 0) {
+      this.muted = false;
+      try {
+        localStorage.setItem('desert_loop_radio_muted', 'false');
+      } catch (e) {}
+      if (this.currentStation.src && this.audio.paused) {
+        this.audio.play().catch(() => {});
+      }
+    }
+    if (!this.muted) {
+      this.audio.volume = this.volume;
+    }
+    try {
+      localStorage.setItem('desert_loop_radio_vol', String(this.volume));
+    } catch (e) {}
+    this.updateUI();
+  }
+
+  applyStation(autoPlay = true) {
+    const st = this.currentStation;
+    if (st.src) {
+      const targetHref = new URL(st.src, window.location.href).href;
+      if (this.audio.src !== targetHref) {
+        this.audio.src = st.src;
+        this.audio.currentTime = 0;
+      }
+      this.audio.volume = this.muted ? 0 : this.volume;
+      if (autoPlay && !this.muted) {
+        this.audio.play().catch(() => {});
+      } else if (this.muted) {
+        this.audio.pause();
+      }
+    } else {
+      this.audio.pause();
+    }
+    try {
+      localStorage.setItem('desert_loop_radio_index', String(this.currentIndex));
+    } catch (e) {}
+    this.updateUI();
+  }
+
+  setStation(index, autoPlay = true, notify = true) {
+    this.currentIndex = (index + RADIO_STATIONS.length) % RADIO_STATIONS.length;
+    if (this.muted && this.currentStation.src) {
+      this.muted = false;
+      try {
+        localStorage.setItem('desert_loop_radio_muted', 'false');
+      } catch (e) {}
+    }
+    this.applyStation(autoPlay);
+    if (notify && (mode === 'race' || mode === 'countdown')) {
+      const player = racers.find((r) => r.isPlayer);
+      const st = this.currentStation;
+      if (st.src) {
+        announcePickup(player, 'radio', st.name, st.freq);
+      } else {
+        announcePickup(player, 'radio', 'RADIO OFF', 'Muted');
+      }
+    }
+  }
+
+  nextStation(notify = true) {
+    this.setStation(this.currentIndex + 1, true, notify);
+  }
+
+  prevStation(notify = true) {
+    this.setStation(this.currentIndex - 1, true, notify);
+  }
+
+  toggleMute() {
+    const st = this.currentStation;
+    if (!st.src) {
+      this.currentIndex = 0;
+      this.muted = false;
+      try {
+        localStorage.setItem('desert_loop_radio_index', '0');
+        localStorage.setItem('desert_loop_radio_muted', 'false');
+      } catch (e) {}
+      this.applyStation(true);
+      if (mode === 'race' || mode === 'countdown') {
+        const player = racers.find((r) => r.isPlayer);
+        announcePickup(player, 'radio', this.currentStation.name, this.currentStation.freq);
+      }
+      return;
+    }
+    this.muted = !this.muted;
+    try {
+      localStorage.setItem('desert_loop_radio_muted', String(this.muted));
+    } catch (e) {}
+    if (this.muted) {
+      this.audio.pause();
+    } else {
+      this.audio.volume = this.volume;
+      this.audio.play().catch(() => {});
+    }
+    this.updateUI();
+    if (mode === 'race' || mode === 'countdown') {
+      const player = racers.find((r) => r.isPlayer);
+      announcePickup(player, 'radio', this.muted ? 'RADIO MUTED' : st.name, this.muted ? '' : st.freq);
+    }
+  }
+
+  ensurePlaying() {
+    if (!this.muted && this.currentStation.src && this.audio.paused) {
+      this.audio.volume = this.volume;
+      this.audio.play().catch(() => {});
+    }
+  }
+
+  updateUI() {
+    const st = this.currentStation;
+    const isPlaying = !this.muted && Boolean(st.src) && !this.audio.paused;
+    const isOff = !st.src;
+    const isMuted = this.muted || isOff;
+
+    if (introRadioTrackEl) {
+      introRadioTrackEl.textContent = isOff ? 'Radio Off' : `${st.name} (${st.freq})`;
+    }
+    if (introRadioEl) {
+      introRadioEl.classList.toggle('muted', isMuted);
+      introRadioEl.classList.toggle('off', isOff);
+      introRadioEl.classList.toggle('playing', isPlaying);
+    }
+    if (introRadioVolumeEl) {
+      introRadioVolumeEl.value = String(this.volume);
+    }
+    if (introRadioVolNumEl) {
+      introRadioVolNumEl.textContent = this.muted ? 'MUTED' : `${Math.round(this.volume * 100)}%`;
+    }
+
+    if (radioTitleEl) {
+      radioTitleEl.textContent = st.name;
+    }
+    if (radioFreqBadgeEl) {
+      radioFreqBadgeEl.textContent = st.freq;
+    }
+    if (radioTagEl) {
+      radioTagEl.textContent = isOff ? 'OFF' : isPlaying ? 'LIVE' : 'PAUSED';
+    }
+    if (radioEqEl) {
+      radioEqEl.classList.toggle('playing', isPlaying);
+      radioEqEl.classList.toggle('muted', isMuted);
+      radioEqEl.classList.toggle('off', isOff);
+    }
+    if (radioHudEl) {
+      radioHudEl.classList.toggle('muted', isMuted);
+      radioHudEl.classList.toggle('off', isOff);
+      radioHudEl.classList.toggle('playing', isPlaying);
+    }
+    if (radioVolumeEl) {
+      radioVolumeEl.value = String(this.volume);
+    }
+    if (radioVolNumEl) {
+      radioVolNumEl.textContent = this.muted ? 'MUTED' : `${Math.round(this.volume * 100)}%`;
+    }
+  }
+}
+
+const radioManager = new RadioManager();
+
 let selectedId = VEHICLES[2].id; // muscle as default pick
 let totalLaps = TOTAL_LAPS_DEFAULT;
 let mode = 'menu'; // menu | countdown | race | finish
 let lossOrbitStart = null;
+let finishCinematicStart = null;
+let finishPlaceSaved = 1;
+const finishSideCamPos = new THREE.Vector3();
 
 garageEl.innerHTML = VEHICLES.map((v) => `
   <button type="button" class="car-card${v.id === selectedId ? ' selected' : ''}" data-id="${v.id}">
@@ -245,6 +511,17 @@ const onIntroPointer = (e) => {
 };
 addEventListener('pointermove', onIntroPointer);
 
+document.querySelectorAll('.track-pick button').forEach((btn) => {
+  btn.addEventListener('click', async () => {
+    const trackId = btn.dataset.track;
+    if (trackId === selectedTrackId) return;
+    try {
+      localStorage.setItem('desert_loop_track', trackId);
+    } catch (e) {}
+    await buildTrack(trackId);
+  });
+});
+
 document.querySelectorAll('.laps-pick button').forEach((btn) => {
   btn.addEventListener('click', () => {
     totalLaps = Number(btn.dataset.laps);
@@ -257,12 +534,33 @@ raceBtn.addEventListener('click', () => startRace());
 document.getElementById('againBtn').addEventListener('click', () => startRace());
 document.getElementById('menuBtn').addEventListener('click', () => showMenu());
 
+introRadioPrevBtn?.addEventListener('click', (e) => { e.stopPropagation(); radioManager.prevStation(); });
+introRadioNextBtn?.addEventListener('click', (e) => { e.stopPropagation(); radioManager.nextStation(); });
+introRadioToggleBtn?.addEventListener('click', (e) => { e.stopPropagation(); radioManager.toggleMute(); });
+
+radioPrevBtn?.addEventListener('click', (e) => { e.stopPropagation(); radioManager.prevStation(); });
+radioNextBtn?.addEventListener('click', (e) => { e.stopPropagation(); radioManager.nextStation(); });
+radioToggleBtn?.addEventListener('click', (e) => { e.stopPropagation(); radioManager.toggleMute(); });
+
+const onVolumeSliderInput = (e) => {
+  e.stopPropagation();
+  radioManager.setVolume(parseFloat(e.target.value));
+};
+introRadioVolumeEl?.addEventListener('input', onVolumeSliderInput);
+introRadioVolumeEl?.addEventListener('change', onVolumeSliderInput);
+radioVolumeEl?.addEventListener('input', onVolumeSliderInput);
+radioVolumeEl?.addEventListener('change', onVolumeSliderInput);
+
 const keys = new Set();
 addEventListener('keydown', (e) => {
   keys.add(e.code);
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
   if (e.code === 'KeyR' && mode === 'race') resetPlayer();
   if (e.code === 'KeyN' && mode === 'race' && !e.repeat) tryUseNitro();
+  if (e.code === 'KeyT' && !e.repeat) radioManager.nextStation();
+  if (e.code === 'BracketRight' && !e.repeat) radioManager.nextStation();
+  if (e.code === 'BracketLeft' && !e.repeat) radioManager.prevStation();
+  if (e.code === 'KeyM' && !e.repeat) radioManager.toggleMute();
   if (e.code === 'Escape') showMenu();
 });
 addEventListener('keyup', (e) => keys.delete(e.code));
@@ -293,24 +591,29 @@ sun.shadow.camera.far = 480;
 sun.position.set(60, 80, 40);
 scene.add(sun);
 
-{
-  const ground = new THREE.Mesh(
-    new THREE.CircleGeometry(420, 96),
-    new THREE.MeshLambertMaterial({ color: 0xc9d4a3 })
-  );
-  ground.rotation.x = -Math.PI / 2;
-  ground.position.y = -0.02;
-  ground.receiveShadow = true;
-  scene.add(ground);
-  const flats = new THREE.Mesh(
-    new THREE.RingGeometry(400, 880, 80),
-    new THREE.MeshLambertMaterial({ color: 0xdbc8a4 })
-  );
-  flats.rotation.x = -Math.PI / 2;
-  flats.position.y = -0.04;
-  flats.receiveShadow = true;
-  scene.add(flats);
-}
+const loader = new GLTFLoader();
+const racers = []; // { mesh, drive, wheels, steers, def, ai, wp, lap, crossed, lastSide }
+
+const ground = new THREE.Mesh(
+  new THREE.CircleGeometry(420, 96),
+  new THREE.MeshLambertMaterial({ color: 0xc9d4a3 })
+);
+ground.rotation.x = -Math.PI / 2;
+ground.position.y = -0.02;
+ground.receiveShadow = true;
+scene.add(ground);
+
+const flats = new THREE.Mesh(
+  new THREE.RingGeometry(400, 880, 80),
+  new THREE.MeshLambertMaterial({ color: 0xdbc8a4 })
+);
+flats.rotation.x = -Math.PI / 2;
+flats.position.y = -0.04;
+flats.receiveShadow = true;
+scene.add(flats);
+
+const trackGroup = new THREE.Group();
+scene.add(trackGroup);
 
 function place(factory, x, z, yaw = 0, params) {
   const obj = factory(params);
@@ -322,7 +625,7 @@ function place(factory, x, z, yaw = 0, params) {
       c.receiveShadow = true;
     }
   });
-  scene.add(obj);
+  trackGroup.add(obj);
   return obj;
 }
 
@@ -357,40 +660,11 @@ function addArc(path, cx, cz, r, a0, a1) {
 }
 
 const R = 70; // corner radius ≫ road half-width — no 90° corners, continuous arcs
-const trackCurve = new THREE.CurvePath();
-
-// Rounded-rectangle circuit with long straights (≈1.5 km scale in game units)
-// South start/finish (west → east)
-addStraight(trackCurve, -180, -150, 200, -150);
-// SE
-addArc(trackCurve, 200, -150 + R, R, -Math.PI / 2, 0);
-// East
-addStraight(trackCurve, 200 + R, -150 + R, 200 + R, 140);
-// NE
-addArc(trackCurve, 200, 140, R, 0, Math.PI / 2);
-// North
-addStraight(trackCurve, 200, 140 + R, -180, 140 + R);
-// NW
-addArc(trackCurve, -180, 140, R, Math.PI / 2, Math.PI);
-// West
-addStraight(trackCurve, -180 - R, 140, -180 - R, -150 + R);
-// SW → joins start
-addArc(trackCurve, -180, -150 + R, R, Math.PI, Math.PI * 1.5);
-
-{
-  const end = trackCurve.curves.at(-1).getPoint(1);
-  const start = trackCurve.curves[0].getPoint(0);
-  const gap = end.distanceTo(start);
-  if (gap > 0.25) {
-    console.warn('track close gap', gap);
-    addStraight(trackCurve, end.x, end.z, start.x, start.z);
-  }
-}
-
-const LOOP_LEN = trackCurve.getLength();
-trackCurve.updateArcLengths();
+let trackCurve = new THREE.CurvePath();
+let LOOP_LEN = 1640;
 
 function frameAt(t) {
+  if (!trackCurve) return { p: new THREE.Vector3(), tan: new THREE.Vector3(1, 0, 0), side: new THREE.Vector3(0, 0, 1) };
   const tt = ((t % 1) + 1) % 1;
   const p = trackCurve.getPointAt(tt);
   let tan = trackCurve.getTangentAt(tt);
@@ -723,6 +997,104 @@ function placeScenery() {
   placeCornerWoods();
 }
 
+function placeAmericanDesertScenery() {
+  // Rich American southwest desert scenery: Saguaro cacti, red rock spires, sandstone boulders, desert scrub
+  const count = 460;
+  for (let i = 0; i < count; i++) {
+    const t = (i + 0.33) / count;
+    const { p, side, tan } = frameAt(t);
+    const outward = sceneryRng(100 + i) > 0.45 ? -1 : 1;
+    const dist = ROAD_WIDTH * 0.5 + 4 + sceneryRng(100 + i + 3) * 65;
+    const along = (sceneryRng(100 + i + 7) - 0.5) * 18;
+    const x = p.x + side.x * outward * dist + tan.x * along;
+    const z = p.z + side.z * outward * dist + tan.z * along;
+    const yaw = sceneryRng(100 + i + 11) * Math.PI * 2;
+    const roll = sceneryRng(100 + i + 13);
+
+    if (roll < 0.35) {
+      const obj = place(createCactus, x, z, yaw);
+      const s = 1.0 + sceneryRng(100 + i + 17) * 0.8;
+      obj.scale.setScalar(s);
+    } else if (roll < 0.58) {
+      const obj = place(createRockSpire, x, z, yaw);
+      const s = 1.2 + sceneryRng(100 + i + 19) * 1.5;
+      obj.scale.set(s * (0.8 + sceneryRng(100 + i + 21) * 0.4), s * 1.4, s * (0.8 + sceneryRng(100 + i + 23) * 0.4));
+    } else if (roll < 0.76) {
+      const obj = place(createRock, x, z, yaw);
+      obj.scale.setScalar(1.1 + sceneryRng(100 + i + 27) * 1.0);
+    } else if (roll < 0.88) {
+      // Single tall grass tuft spot
+      const tuft = place(createSeagrass, x, z, yaw, {
+        colorway: 'bleached-bed',
+        tallness: 0.95 + sceneryRng(100 + i + 29) * 0.15,
+        blades: 11,
+      });
+      tuft.scale.setScalar(1.2 + sceneryRng(100 + i + 31) * 0.7);
+    } else if (roll < 0.96) {
+      place(createBush, x, z, yaw);
+    } else {
+      const obj = place(createPine, x, z, yaw);
+      obj.scale.setScalar(1.4);
+    }
+  }
+
+  // Tiny spots of tall grass (clusters of 2-3 tufts along roadside shoulders & desert floor)
+  const grassSpotCount = 130;
+  for (let g = 0; g < grassSpotCount; g++) {
+    const t = (g + 0.19) / grassSpotCount;
+    const { p, side, tan } = frameAt(t);
+    const outward = sceneryRng(500 + g) > 0.5 ? -1 : 1;
+    const dist = ROAD_WIDTH * 0.5 + 2.5 + sceneryRng(500 + g + 2) * 32;
+    const along = (sceneryRng(500 + g + 5) - 0.5) * 16;
+    const cx = p.x + side.x * outward * dist + tan.x * along;
+    const cz = p.z + side.z * outward * dist + tan.z * along;
+
+    const clusterSize = sceneryRng(500 + g + 7) > 0.4 ? 3 : 2;
+    for (let k = 0; k < clusterSize; k++) {
+      const ox = cx + (sceneryRng(500 + g * 10 + k * 4) - 0.5) * 1.6;
+      const oz = cz + (sceneryRng(500 + g * 10 + k * 4 + 1) - 0.5) * 1.6;
+      const yaw = sceneryRng(500 + g * 10 + k * 4 + 2) * Math.PI * 2;
+      const colorScheme = sceneryRng(500 + g * 10 + k) > 0.2 ? 'bleached-bed' : 'reef-green';
+      const tuft = place(createSeagrass, ox, oz, yaw, {
+        colorway: colorScheme,
+        tallness: 0.9 + sceneryRng(500 + g * 10 + k * 4 + 3) * 0.2,
+        blades: 10 + (k % 3),
+      });
+      tuft.scale.setScalar(1.1 + sceneryRng(500 + g * 10 + k * 4 + 4) * 0.8);
+    }
+  }
+
+  // Canyon wall formations on corner spans
+  const spans = findCornerSpans();
+  for (const [spanIndex, span] of spans.entries()) {
+    walkSpan(span, 32, (t, i) => {
+      const { p, side, tan } = frameAt(t);
+      for (const dir of [-1, 1]) {
+        const dist = 7 + sceneryRng(spanIndex * 50 + i + dir + 5) * 32;
+        const along = (sceneryRng(spanIndex * 50 + i + 11) - 0.5) * 10;
+        const x = p.x + side.x * dir * (ROAD_WIDTH * 0.5 + dist) + tan.x * along;
+        const z = p.z + side.z * dir * (ROAD_WIDTH * 0.5 + dist) + tan.z * along;
+        const yaw = sceneryRng(spanIndex * 50 + i + 14) * Math.PI * 2;
+        const roll = sceneryRng(spanIndex * 50 + i + 18);
+        if (roll < 0.45) {
+          const spire = place(createRockSpire, x, z, yaw);
+          spire.scale.set(1.5 + sceneryRng(spanIndex * 50 + i + 2) * 1.8, 2.2 + sceneryRng(spanIndex * 50 + i + 4) * 1.6, 1.5);
+        } else if (roll < 0.70) {
+          const rock = place(createRock, x, z, yaw);
+          rock.scale.setScalar(1.4 + sceneryRng(spanIndex * 50 + i + 6) * 1.2);
+        } else if (roll < 0.85) {
+          const cactus = place(createCactus, x, z, yaw);
+          cactus.scale.setScalar(1.3);
+        } else {
+          // Grass tuft at base of canyon wall / rock
+          const tuft = place(createSeagrass, x, z, yaw, { colorway: 'bleached-bed', tallness: 1.05 });
+          tuft.scale.setScalar(1.3);
+        }
+      }
+    });
+  }
+}
+
 const BUILDING_IDS = [
   'timber-barn-90b3ce',
   'three-storey-shophouse-2f6378',
@@ -733,7 +1105,9 @@ const BUILDING_IDS = [
   'two-story-house-40f6dc',
 ];
 
+const buildingTemplates = {};
 async function loadBuildingTemplate(id) {
+  if (buildingTemplates[id]) return buildingTemplates[id];
   const gltf = await loader.loadAsync(`./assets/${id}-preview.glb`);
   const asset = gltf.scene;
   asset.traverse((c) => {
@@ -742,6 +1116,7 @@ async function loadBuildingTemplate(id) {
       c.receiveShadow = true;
     }
   });
+  buildingTemplates[id] = asset;
   return asset;
 }
 
@@ -785,7 +1160,7 @@ async function placeBuildings() {
         b.position.set(x, 0, z);
         b.rotation.y = Math.atan2(-side.x * districtSide, -side.z * districtSide)
           + (i % 2 === 0 ? 0 : 0.22);
-        scene.add(b);
+        trackGroup.add(b);
       });
       for (const offset of [-5, 0, 5]) {
         const x = p.x + side.x * districtSide * (base - 5) + tan.x * offset;
@@ -816,7 +1191,7 @@ async function placeBuildings() {
     const b = templates[spot.id].clone(true);
     b.position.set(x, 0, z);
     b.rotation.y = Math.atan2(-side.x * spot.side, -side.z * spot.side);
-    scene.add(b);
+    trackGroup.add(b);
   }
 
   const cornerIds = BUILDING_IDS;
@@ -834,10 +1209,53 @@ async function placeBuildings() {
           const b = templates[id].clone(true);
           b.position.set(x, 0, z);
           b.rotation.y = Math.atan2(-side.x * dir, -side.z * dir) + (k ? 0.18 : 0);
-          scene.add(b);
+          trackGroup.add(b);
         }
       }
     });
+  }
+}
+
+async function placeAmericanDesertBuildings() {
+  const templates = {};
+  await Promise.all(BUILDING_IDS.map(async (id) => {
+    templates[id] = await loadBuildingTemplate(id);
+  }));
+
+  // Route 66 Highway pitstops, diners, desert barns, outpost stations
+  const clusters = [
+    { t: 0.04, ids: ['street-diner-bb174e', 'corner-shop-db18e2', 'timber-barn-90b3ce'] },
+    { t: 0.28, ids: ['cove-tavern-5861a6', 'two-story-house-40f6dc'] },
+    { t: 0.55, ids: ['street-diner-bb174e', 'timber-barn-90b3ce', 'two-story-house-40f6dc'] },
+    { t: 0.78, ids: ['village-tavern-4e94e3', 'corner-shop-db18e2'] },
+    { t: 0.94, ids: ['timber-barn-90b3ce', 'street-diner-bb174e'] },
+  ];
+
+  for (const [clusterIndex, cl] of clusters.entries()) {
+    const { p, side, tan } = frameAt(cl.t);
+    const base = ROAD_WIDTH * 0.5 + 15;
+    const dir = clusterIndex % 2 === 0 ? 1 : -1;
+    cl.ids.forEach((id, i) => {
+      const lat = base + (i % 2) * 12;
+      const along = (i - (cl.ids.length - 1) / 2) * 12;
+      const x = p.x + side.x * dir * lat + tan.x * along;
+      const z = p.z + side.z * dir * lat + tan.z * along;
+      const b = templates[id].clone(true);
+      b.position.set(x, 0, z);
+      b.rotation.y = Math.atan2(-side.x * dir, -side.z * dir);
+      trackGroup.add(b);
+    });
+    for (const offset of [-6, 0, 6]) {
+      const x = p.x + side.x * dir * (base - 5) + tan.x * offset;
+      const z = p.z + side.z * dir * (base - 5) + tan.z * offset;
+      place(createFence, x, z, Math.atan2(tan.x, tan.z));
+    }
+    place(
+      createSign,
+      p.x + side.x * dir * (ROAD_WIDTH * 0.5 + 7),
+      p.z + side.z * dir * (ROAD_WIDTH * 0.5 + 7),
+      Math.atan2(-side.x * dir, -side.z * dir)
+    );
   }
 }
 
@@ -950,6 +1368,19 @@ const MOUNTAIN_BIOMES = {
     forestLo: 0.06,
     forestHi: 0.32,
   },
+  canyon: {
+    desert: new THREE.Color(0xd47a3e),
+    dirt: new THREE.Color(0xa85226),
+    forest: new THREE.Color(0x784422),
+    meadow: new THREE.Color(0xb86432),
+    rock: new THREE.Color(0xbf5b28),
+    cliff: new THREE.Color(0x8a3818),
+    snow: new THREE.Color(0xecd4b4),
+    ice: new THREE.Color(0xdfba92),
+    snowLine: 0.95,
+    forestLo: 0.04,
+    forestHi: 0.22,
+  },
 };
 
 function colorMountainVertex(tmp, t, slope, north, biome) {
@@ -1035,7 +1466,7 @@ function plantMountainForest(mesh, seed, width, depth, height, count, scale) {
         c.receiveShadow = false;
       }
     });
-    scene.add(pine);
+    trackGroup.add(pine);
   }
 }
 
@@ -1044,7 +1475,7 @@ function createSkyDome() {
   const geo = new THREE.SphereGeometry(radius, 40, 18, 0, Math.PI * 2, 0, Math.PI * 0.52);
   const cols = [];
   const pos = geo.attributes.position;
-  const horizon = new THREE.Color(FOG_COLOR);
+  const horizon = new THREE.Color(scene.fog ? scene.fog.color : FOG_COLOR);
   const zenith = new THREE.Color(0x8ec4e8);
   const tmp = new THREE.Color();
   for (let i = 0; i < pos.count; i++) {
@@ -1066,8 +1497,8 @@ function createSkyDome() {
   return mesh;
 }
 
-function placeHorizon() {
-  scene.add(createSkyDome());
+function placeHorizonStandard() {
+  trackGroup.add(createSkyDome());
   const mat = { vertexColors: true, flatShading: false };
 
   const placeRange = (count, radius, width, depth, height, biome, seed0, yawJitter, forest, treeScale, segs) => {
@@ -1086,7 +1517,7 @@ function placeHorizon() {
       mesh.rotation.y = -a - Math.PI * 0.5 + (sceneryRng(seed0 + i + 8) - 0.5) * yawJitter;
       mesh.castShadow = false;
       mesh.receiveShadow = false;
-      scene.add(mesh);
+      trackGroup.add(mesh);
       if (forest > 0) plantMountainForest(mesh, seed, w, d, h, forest, treeScale);
     }
   };
@@ -1094,6 +1525,36 @@ function placeHorizon() {
   placeRange(7, 420, 170, 80, 46, 'foothill', 3, 0.2, 34, 1.55, [48, 26]);
   placeRange(9, 545, 260, 115, 98, 'alpine', 21, 0.16, 22, 2.1, [60, 32]);
   placeRange(8, 730, 320, 140, 138, 'high', 44, 0.1, 0, 1, [48, 26]);
+}
+
+function placeHorizonAmericanDesert() {
+  trackGroup.add(createSkyDome());
+  const mat = { vertexColors: true, flatShading: false };
+
+  const placeRange = (count, radius, width, depth, height, biome, seed0, yawJitter, segs) => {
+    for (let i = 0; i < count; i++) {
+      const a = (i / count) * Math.PI * 2 + 0.12;
+      const r = radius + sceneryRng(seed0 + i) * 36;
+      const w = width * (0.88 + sceneryRng(seed0 + i + 2) * 0.26);
+      const d = depth * (0.84 + sceneryRng(seed0 + i + 4) * 0.28);
+      const h = height * (0.82 + sceneryRng(seed0 + i + 6) * 0.38);
+      const seed = seed0 + i * 17.3;
+      const mesh = new THREE.Mesh(
+        makeMountainRange(seed, w, d, h, biome, segs),
+        new THREE.MeshLambertMaterial(mat)
+      );
+      mesh.position.set(Math.cos(a) * r, -3, Math.sin(a) * r);
+      mesh.rotation.y = -a - Math.PI * 0.5 + (sceneryRng(seed0 + i + 8) - 0.5) * yawJitter;
+      mesh.castShadow = false;
+      mesh.receiveShadow = false;
+      trackGroup.add(mesh);
+    }
+  };
+
+  // Southwestern Canyon Mesas & Ridge backdrop
+  placeRange(8, 430, 180, 85, 52, 'canyon', 11, 0.22, [48, 26]);
+  placeRange(9, 560, 280, 120, 105, 'canyon', 37, 0.16, [60, 32]);
+  placeRange(8, 740, 340, 145, 145, 'high', 55, 0.1, [48, 26]);
 }
 
 // —— Power-ups & speed boosters ——
@@ -1579,10 +2040,10 @@ function makePowerOrb(type) {
       : makeFuelPickup();
   const platform = makePickupPlatform(built.accent, built.glow);
   const shafts = makeLightShafts(built.glow);
-  built.hover.position.y = 1.22;
-  built.hover.scale.setScalar(1.18);
+  built.hover.position.y = 1.35;
+  built.hover.scale.setScalar(0.92);
   const billboard = new THREE.Mesh(
-    new THREE.PlaneGeometry(2.6, 2.6),
+    new THREE.PlaneGeometry(2.4, 2.4),
     new THREE.MeshBasicMaterial({
       map: getRadialGlowTexture(built.glow),
       transparent: true,
@@ -1591,7 +2052,7 @@ function makePowerOrb(type) {
       blending: THREE.AdditiveBlending,
     })
   );
-  billboard.position.y = 1.22;
+  billboard.position.y = 1.35;
   group.add(platform, shafts, billboard, built.hover);
   group.userData.hover = built.hover;
   group.userData.glowMat = platform.userData.glow;
@@ -1679,7 +2140,7 @@ function placePowerups() {
     mesh.position.copy(p).addScaledVector(side, lane);
     mesh.position.y = 0.055;
     mesh.rotation.y = Math.atan2(tan.x, tan.z);
-    scene.add(mesh);
+    trackGroup.add(mesh);
     boostPads.push({ t, lane, mesh, flash: 0 });
   }
 
@@ -1701,13 +2162,13 @@ function placePowerups() {
     const { p, side } = frameAt(t);
     const mesh = makePowerOrb(type);
     mesh.position.copy(p).addScaledVector(side, lane);
-    scene.add(mesh);
+    trackGroup.add(mesh);
     powerups.push({ t, lane, type, mesh, taken: false, respawn: 0 });
   });
 }
 
 function placeOilSlicks() {
-  const spots = [0.08, 0.17, 0.33, 0.42, 0.58, 0.67, 0.83, 0.92].map((t) => ({
+  const spots = [0.18, 0.43, 0.68, 0.91].map((t) => ({
     t,
     lane: (Math.random() < 0.5 ? -1 : 1) * 2.4,
   }));
@@ -1717,7 +2178,7 @@ function placeOilSlicks() {
     mesh.position.copy(p).addScaledVector(side, lane);
     mesh.position.y = 0.085;
     mesh.rotation.y = Math.atan2(tan.x, tan.z) + (index % 2 === 0 ? 0.2 : -0.18);
-    scene.add(mesh);
+    trackGroup.add(mesh);
     oilSlicks.push({ t, lane, mesh });
   });
 }
@@ -1758,21 +2219,167 @@ function placeTrackProps() {
   }
 }
 
-const roadMesh = createRoadMesh();
-scene.add(roadMesh);
-scene.add(addCenterDashes());
-scene.add(addEdgeLines());
-scene.add(addFinishZebra());
-placeTrackProps();
-placeHorizon();
-placeScenery();
-placePowerups();
-placeOilSlicks();
+const TRACKS = [
+  {
+    id: 'american-desert',
+    name: 'American Desert',
+    tagline: 'Red Rock Highway & Canyon',
+    lengthLabel: '1,820 m circuit',
+    fogColor: 0xf2ddc7,
+    fogNear: 220,
+    fogFar: 980,
+    groundColor: 0xdf9e62,
+    flatsColor: 0xc87d40,
+    buildCurve: () => {
+      const points = [
+        new THREE.Vector3(-180, 0, -160),
+        new THREE.Vector3(-40, 0, -160),
+        new THREE.Vector3(120, 0, -160),
+        new THREE.Vector3(220, 0, -110),
+        new THREE.Vector3(250, 0, -10),
+        new THREE.Vector3(210, 0, 80),
+        new THREE.Vector3(245, 0, 150),
+        new THREE.Vector3(160, 0, 230),
+        new THREE.Vector3(20, 0, 240),
+        new THREE.Vector3(-110, 0, 230),
+        new THREE.Vector3(-210, 0, 170),
+        new THREE.Vector3(-260, 0, 80),
+        new THREE.Vector3(-210, 0, 0),
+        new THREE.Vector3(-260, 0, -70),
+        new THREE.Vector3(-230, 0, -145),
+      ];
+      return new THREE.CatmullRomCurve3(points, true, 'centripetal');
+    },
+    buildHorizon: () => {
+      placeHorizonAmericanDesert();
+    },
+    buildScenery: async () => {
+      placeAmericanDesertScenery();
+      await placeAmericanDesertBuildings();
+    },
+  },
+  {
+    id: 'city',
+    name: 'City',
+    tagline: 'City Oasis Circuit',
+    lengthLabel: '1,640 m circuit',
+    fogColor: 0xf3ecdc,
+    fogNear: 210,
+    fogFar: 940,
+    groundColor: 0xc9d4a3,
+    flatsColor: 0xdbc8a4,
+    buildCurve: () => {
+      const path = new THREE.CurvePath();
+      const cornerR = 70;
+      addStraight(path, -180, -150, 200, -150);
+      addArc(path, 200, -150 + cornerR, cornerR, -Math.PI / 2, 0);
+      addStraight(path, 200 + cornerR, -150 + cornerR, 200 + cornerR, 140);
+      addArc(path, 200, 140, cornerR, 0, Math.PI / 2);
+      addStraight(path, 200, 140 + cornerR, -180, 140 + cornerR);
+      addArc(path, -180, 140, cornerR, Math.PI / 2, Math.PI);
+      addStraight(path, -180 - cornerR, 140, -180 - cornerR, -150 + cornerR);
+      addArc(path, -180, -150 + cornerR, cornerR, Math.PI, Math.PI * 1.5);
+      const end = path.curves.at(-1).getPoint(1);
+      const start = path.curves[0].getPoint(0);
+      if (end.distanceTo(start) > 0.25) addStraight(path, end.x, end.z, start.x, start.z);
+      return path;
+    },
+    buildHorizon: () => {
+      placeHorizonStandard();
+    },
+    buildScenery: async () => {
+      placeScenery();
+      await placeBuildings();
+    },
+  },
+];
+
+let selectedTrackId = 'american-desert';
+try {
+  let saved = localStorage.getItem('desert_loop_track');
+  if (saved === 'desert-loop') saved = 'city';
+  if (saved && TRACKS.some((t) => t.id === saved)) {
+    selectedTrackId = saved;
+  }
+} catch (e) {}
+
+const WAYPOINTS = [];
+
+async function buildTrack(trackId) {
+  selectedTrackId = trackId;
+  const trackDef = TRACKS.find((t) => t.id === trackId) || TRACKS[0];
+
+  while (trackGroup.children.length > 0) {
+    const child = trackGroup.children[0];
+    trackGroup.remove(child);
+    child.traverse?.((c) => {
+      if (c.geometry) c.geometry.dispose?.();
+    });
+  }
+  boostPads.length = 0;
+  powerups.length = 0;
+  oilSlicks.length = 0;
+  pickupBursts.length = 0;
+  WAYPOINTS.length = 0;
+
+  trackCurve = trackDef.buildCurve();
+  LOOP_LEN = trackCurve.getLength();
+  trackCurve.updateArcLengths();
+
+  ground.material.color.setHex(trackDef.groundColor);
+  flats.material.color.setHex(trackDef.flatsColor);
+  scene.background.setHex(trackDef.fogColor);
+  if (scene.fog) {
+    scene.fog.color.setHex(trackDef.fogColor);
+    scene.fog.near = trackDef.fogNear;
+    scene.fog.far = trackDef.fogFar;
+  }
+
+  const roadMesh = createRoadMesh();
+  trackGroup.add(roadMesh);
+  trackGroup.add(addCenterDashes());
+  trackGroup.add(addEdgeLines());
+  trackGroup.add(addFinishZebra());
+  placeTrackProps();
+
+  trackDef.buildHorizon();
+  await trackDef.buildScenery();
+
+  placePowerups();
+  placeOilSlicks();
+
+  const n = Math.max(48, Math.floor(LOOP_LEN / 16));
+  for (let i = 0; i < n; i++) {
+    const p = trackCurve.getPointAt(i / n);
+    WAYPOINTS.push({ x: p.x, z: p.z });
+  }
+
+  const titleEl = document.getElementById('title');
+  if (titleEl) titleEl.textContent = trackDef.name;
+  const trackLengthBadge = document.getElementById('trackLengthBadge');
+  if (trackLengthBadge) trackLengthBadge.textContent = trackDef.lengthLabel;
+
+  document.querySelectorAll('.track-pick button').forEach((b) => {
+    b.classList.toggle('on', b.dataset.track === selectedTrackId);
+  });
+}
 
 // Debug helpers for screenshots / tuning
 window.__desertLoop = {
-  LOOP_LEN,
+  get LOOP_LEN() { return LOOP_LEN; },
   frameAt,
+  getTracks: () => TRACKS,
+  getCurrentTrack: () => selectedTrackId,
+  setTrack: (id) => buildTrack(id),
+  radio: {
+    getStations: () => RADIO_STATIONS,
+    getCurrentStation: () => radioManager.currentStation,
+    setStation: (idx, notify = true) => radioManager.setStation(idx, true, notify),
+    nextStation: (notify = true) => radioManager.nextStation(notify),
+    prevStation: (notify = true) => radioManager.prevStation(notify),
+    toggleMute: () => radioManager.toggleMute(),
+    setVolume: (v) => { radioManager.volume = v; if (!radioManager.muted) radioManager.audio.volume = v; },
+  },
   setTopDown(on = true) {
     if (on) {
       scene.fog = null;
@@ -1785,7 +2392,8 @@ window.__desertLoop = {
       window.__topDown = true;
     } else {
       window.__topDown = false;
-      scene.fog = new THREE.Fog(FOG_COLOR, FOG_NEAR, FOG_FAR);
+      const curTrack = TRACKS.find((t) => t.id === selectedTrackId) || TRACKS[0];
+      scene.fog = new THREE.Fog(curTrack.fogColor, curTrack.fogNear, curTrack.fogFar);
       camera.fov = 50;
       camera.near = 0.1;
       camera.far = CAMERA_FAR;
@@ -1807,16 +2415,6 @@ window.__desertLoop = {
     window.__freezeCam = true;
   },
 };
-
-// AI / lap samples along the continuous centerline
-const WAYPOINTS = [];
-{
-  const n = Math.max(48, Math.floor(LOOP_LEN / 16));
-  for (let i = 0; i < n; i++) {
-    const p = trackCurve.getPointAt(i / n);
-    WAYPOINTS.push({ x: p.x, z: p.z });
-  }
-}
 
 function progressAlongTrack(x, z) {
   let bestDist = Infinity;
@@ -1845,8 +2443,6 @@ function progressAlongTrack(x, z) {
 }
 
 // —— Vehicles / race state ——
-const loader = new GLTFLoader();
-const racers = []; // { mesh, drive, wheels, steers, def, ai, wp, lap, crossed, lastSide }
 window.__desertLoop.getRaceState = () => ({
   racerCount: racers.length,
   cameraDistance: racers[0] ? camera.position.distanceTo(racers[0].mesh.position) : null,
@@ -2968,13 +3564,15 @@ async function spawnField(playerId) {
 
 function applyDamage(racer, amount, impact = null) {
   if (racer.wrecked || racer.hitCooldown > 0 || amount <= 0) return;
-  racer.health = Math.max(0, racer.health - amount);
+  // Reduce damage intake by 50% for everyone to make racing balanced and enjoyable
+  const adjustedAmount = amount * 0.5;
+  racer.health = Math.max(0, racer.health - adjustedAmount);
   racer.hitCooldown = 0.45;
   racer.drive.speed *= 0.94;
-  applyBodyImpactDamage(racer, amount, impact || {});
+  applyBodyImpactDamage(racer, adjustedAmount, impact || {});
   syncVisualDamage(racer, true);
-  spawnImpactSparks(racer, amount);
-  announcePickup(racer, 'impact', 'IMPACT', `−${Math.round(amount)}`);
+  spawnImpactSparks(racer, adjustedAmount);
+  announcePickup(racer, 'impact', 'IMPACT', `−${Math.round(adjustedAmount)}`);
   if (racer.health <= 0) {
     racer.wrecked = true;
     racer.drive.speed = 0;
@@ -3164,8 +3762,9 @@ const TOAST_ICONS = {
   impact: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="m12 2 2.2 6.4L21 11l-6.8 2.6L12 20l-2.2-6.4L3 11l6.8-2.6L12 2z"/></svg>',
   empty: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 3h7a2 2 0 0 1 2 2v3.2l4 3V14.5A3.5 3.5 0 0 1 16.5 18H16v2H6v-2H5.5A1.5 1.5 0 0 1 4 16.5v-11A2.5 2.5 0 0 1 6.5 3H7zm2 2v7h5V5H9zm10.6 14.1L3.7 4.2 5 2.9l15.9 15.9-1.3 1.3z"/></svg>',
   nitro: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M9 2h6l.8 3H19v2h-1.2l-1.1 13H7.3L6.2 7H5V5h3.2L9 2zm1.2 3 .5-1.5h2.6L13.8 5H10.2zM8.3 7l.9 11h5.6l.9-11H8.3z"/></svg>',
+  radio: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3.24 6.15C2.51 6.43 2 7.17 2 8v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2H8.3l8.26-3.34L15.88 1 3.24 6.15zM4 8h16v12H4V8zm4 3a3 3 0 1 0 0 6 3 3 0 0 0 0-6zm0 2a1 1 0 1 1 0 2 1 1 0 0 1 0-2zm8-2h2v2h-2v-2zm0 4h2v2h-2v-2z"/></svg>',
 };
-const TOAST_KINDS = ['boost', 'fuel', 'repair', 'nitro', 'oil', 'impact', 'empty'];
+const TOAST_KINDS = ['boost', 'fuel', 'repair', 'nitro', 'oil', 'impact', 'empty', 'radio'];
 
 function tryUseNitro() {
   const racer = racers.find((entry) => entry.isPlayer);
@@ -3191,7 +3790,7 @@ function updateNitroHud(player) {
   if (!nitroHudEl) return;
   const charges = player ? (player.nitroCharges || 0) : 0;
   if (nitroValueEl) {
-    nitroValueEl.textContent = charges >= NITRO_MAX ? 'MAX' : charges > 0 ? 'READY' : '—';
+    nitroValueEl.textContent = charges >= NITRO_MAX ? 'MAX' : charges > 0 ? `${charges}/${NITRO_MAX}` : '—';
   }
   nitroHudEl.classList.toggle('ready', charges > 0);
   nitroHudEl.classList.toggle('empty', charges <= 0);
@@ -3384,27 +3983,29 @@ function updateLap(racer) {
   const prog = progressAlongTrack(d.x, d.z);
   const frac = (((prog / LOOP_LEN) % 1) + 1) % 1;
 
-  if (frac > 0.40 && frac < 0.70) racer.passedMid = true;
+  if (frac > 0.35 && frac < 0.65) racer.passedMid = true;
 
-  const nearFinish = frac < 0.025 || frac > 0.975;
-  if (nearFinish) {
-    if (!racer.nearFinish && racer.passedMid && d.speed > 2) {
-      if (racer.lap >= totalLaps) {
-        if (!racer.finished) {
-          racer.finished = true;
-          racer.finishPlace = racers.filter((r) => r.finished).length;
-          if (racer.isPlayer) showFinish(racer.finishPlace);
+  const lastFrac = racer.lastFrac !== undefined ? racer.lastFrac : frac;
+  // A forward crossing across 0.0 occurs when lastFrac is near loop end (> 0.82) and current frac is near loop start (< 0.18)
+  const crossedFinishLine = (lastFrac > 0.82 && frac < 0.18);
+
+  if (crossedFinishLine && racer.passedMid && d.speed > 1.5) {
+    if (racer.lap >= totalLaps) {
+      if (!racer.finished) {
+        racer.finished = true;
+        racer.finishPlace = racers.filter((r) => r.finished).length;
+        if (racer.isPlayer) {
+          showFinish(racer.finishPlace);
         }
-      } else {
-        racer.lap += 1;
-        if (racer.isPlayer) lapCountEl.textContent = String(racer.lap);
       }
-      racer.passedMid = false;
+    } else {
+      racer.lap += 1;
+      if (racer.isPlayer) lapCountEl.textContent = String(racer.lap);
     }
-    racer.nearFinish = true;
-  } else {
-    racer.nearFinish = false;
+    racer.passedMid = false;
   }
+
+  racer.lastFrac = frac;
 
   const wp = WAYPOINTS[racer.wp % WAYPOINTS.length];
   if (Math.hypot(d.x - wp.x, d.z - wp.z) < 12) {
@@ -3717,6 +4318,46 @@ function updateCamera(dt) {
   }
   const player = racers.find((r) => r.isPlayer);
   if (!player) return;
+
+  // 1. Victory / finish line cinematic (side track view -> orbit view)
+  if (finishCinematicStart !== null) {
+    const elapsed = clock.elapsedTime - finishCinematicStart;
+    const SIDE_VIEW_DURATION = 2.3;
+
+    if (elapsed < SIDE_VIEW_DURATION) {
+      // Dynamic trackside side-view camera tracking player car across finish
+      camera.position.lerp(finishSideCamPos, 0.12);
+      const lookY = player.mesh.position.y + 0.65;
+      camera.lookAt(player.mesh.position.x, lookY, player.mesh.position.z);
+      if (camera.fov !== 46) {
+        camera.fov = 46;
+        camera.updateProjectionMatrix();
+      }
+      return;
+    } else {
+      // Orbit camera view around player car as it coasts to a stop
+      const orbitElapsed = elapsed - SIDE_VIEW_DURATION;
+      const orbit = player.drive.yaw + orbitElapsed * 0.42;
+      const targetY = player.mesh.position.y + 0.75;
+      camera.position.set(
+        player.mesh.position.x + Math.sin(orbit) * 7.5,
+        targetY + 2.4,
+        player.mesh.position.z + Math.cos(orbit) * 7.5
+      );
+      if (camera.fov !== 42) {
+        camera.fov = 42;
+        camera.updateProjectionMatrix();
+      }
+      camera.lookAt(player.mesh.position.x, targetY, player.mesh.position.z);
+
+      if (!finishEl.classList.contains('show')) {
+        showFinishModal(finishPlaceSaved);
+      }
+      return;
+    }
+  }
+
+  // 2. Race lost orbit camera
   if (lossOrbitStart !== null) {
     const elapsed = clock.elapsedTime - lossOrbitStart;
     const orbit = player.drive.yaw + elapsed * 0.42;
@@ -3733,6 +4374,8 @@ function updateCamera(dt) {
     camera.lookAt(player.mesh.position.x, targetY, player.mesh.position.z);
     return;
   }
+
+  // 3. Standard race chase camera
   if (cameraYaw === null) cameraYaw = player.drive.yaw;
   const yawDelta = Math.atan2(
     Math.sin(player.drive.yaw - cameraYaw),
@@ -3756,12 +4399,26 @@ function updateCamera(dt) {
   camera.lookAt(lookPos);
 }
 
+function updateFinishedRacers(dt) {
+  for (const r of racers) {
+    if (r.drive && r.drive.speed > 0) {
+      r.drive.speed = Math.max(0, r.drive.speed - 14 * dt);
+      r.drive.x += Math.sin(r.drive.yaw) * r.drive.speed * dt;
+      r.drive.z += Math.cos(r.drive.yaw) * r.drive.speed * dt;
+      applyPose(r, 0);
+      updateVehicleEffects(r, dt, false, r.drive.speed > 0.5);
+    }
+  }
+}
+
 function resetPlayer() {
   const player = racers.find((r) => r.isPlayer);
   if (!player) return;
   const s = gridStarts()[PLAYER_GRID_SLOT];
   Object.assign(player.drive, { x: s.x, z: s.z, yaw: s.yaw, speed: 0 });
   cameraYaw = s.yaw;
+  lossOrbitStart = null;
+  finishCinematicStart = null;
   player.health = 100;
   player.fuel = 100;
   player.wrecked = false;
@@ -3791,6 +4448,7 @@ function showMenu() {
   mode = 'menu';
   cameraYaw = null;
   lossOrbitStart = null;
+  finishCinematicStart = null;
   introEl.classList.remove('hidden');
   hudEl.classList.remove('on');
   finishEl.classList.remove('show');
@@ -3812,6 +4470,8 @@ function showMenu() {
 async function startRace() {
   mode = 'countdown';
   lossOrbitStart = null;
+  finishCinematicStart = null;
+  radioManager.ensurePlaying();
   introEl.classList.add('hidden');
   finishEl.classList.remove('show');
   finishEl.classList.remove('loss');
@@ -3841,16 +4501,32 @@ async function startRace() {
 function showFinish(place) {
   mode = 'finish';
   lossOrbitStart = null;
+  finishCinematicStart = clock.elapsedTime;
+  finishPlaceSaved = place;
+
+  // Trackside camera placed ~14m past the finish line on the outer shoulder
+  const f = frameAt(0.012);
+  const sideOffset = ROAD_WIDTH * 0.5 + 4.8;
+  finishSideCamPos.set(
+    f.p.x + f.side.x * sideOffset,
+    2.1,
+    f.p.z + f.side.z * sideOffset
+  );
+}
+
+function showFinishModal(place) {
   finishEl.classList.remove('loss');
+  const currentTrackName = (TRACKS.find((t) => t.id === selectedTrackId) || TRACKS[0]).name;
   finishTitle.textContent = place === 1 ? 'You win!' : `${ordinal(place)} place`;
   finishMsg.textContent = place === 1
-    ? 'Clean run around Desert Loop.'
+    ? `Clean run around ${currentTrackName}.`
     : 'Hit Race again or head back to the garage.';
   finishEl.classList.add('show');
 }
 
 function showLoss(message) {
   mode = 'finish';
+  finishCinematicStart = null;
   lossOrbitStart = clock.elapsedTime;
   finishTitle.textContent = 'Race lost';
   finishMsg.textContent = message;
@@ -3872,6 +4548,8 @@ const clock = new THREE.Clock();
 camera.position.set(40, 68, 150);
 camera.lookAt(10, 2, 40);
 
+await buildTrack(selectedTrackId);
+
 renderer.setAnimationLoop(() => {
   const dt = Math.min(clock.getDelta(), 0.05);
   updateBoostPadVisuals(dt);
@@ -3890,11 +4568,13 @@ renderer.setAnimationLoop(() => {
       resolveRacerCollisions();
       updatePowerups(dt);
       updatePlaceHud();
+    } else if (mode === 'finish' && finishCinematicStart !== null) {
+      updateFinishedRacers(dt);
     }
     updateCamera(dt);
     const player = racers.find((r) => r.isPlayer);
     updateSpeedEffects(dt, player);
-    if (lossOrbitStart !== null && player) {
+    if ((lossOrbitStart !== null || finishCinematicStart !== null) && player) {
       updateVehicleEffects(player, dt, false, false);
     }
   }

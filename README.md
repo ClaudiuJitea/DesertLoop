@@ -19,14 +19,20 @@ Open [http://localhost:8765](http://localhost:8765).
 | Key | Action |
 | --- | --- |
 | `W` / `↑` | Accelerate |
-| `S` / `↓` | Brake / reverse |
+| `S` / `↓` / `Space` | Brake / handbrake / reverse |
 | `A` / `←` · `D` / `→` | Steer |
 | `N` | Use stored nitro |
-| Garage UI | Choose car and lap count (3 or 5) |
+| `T` / `]` / `[` | Next / Previous radio station |
+| `M` | Mute / Unmute radio |
+| Garage, Track & Radio UI | Choose car, track (Desert / City), lap count (3 or 5), and select radio station |
 
 ## Features
 
+- **Multiple Race Circuits**:
+  - **Desert** (1,820m): Main circuit — red rock canyon highway with Saguaro cacti, sandstone monolith spires, Route 66 diners, ranch barns, and canyon chicanes.
+  - **City** (1,640m): Oasis valley circuit with buildings, high-speed sweepers, and pine groves.
 - Four driveable cars: Camper Van, Pickup Truck, Muscle Car, Hatchback
+- In-game Desert Radio with selectable stations from `sounds/radio/` (`Neon Night`, `Neon Velocity`, `Radio Off`), live animated equalizer, and hotkeys
 - AI pack with passing, blocking recovery, and lane changes
 - Fuel and damage meters; race ends if you run dry or get totaled
 - Boost pads on the racing line, plus fuel, repair, and nitro pickups

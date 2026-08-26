@@ -103,7 +103,7 @@ function resolve(p) {
 }
 
 function prep(geo, colorFn) {
-  geo = geo.toNonIndexed();
+  if (geo.index) geo = geo.toNonIndexed();
   geo.deleteAttribute('uv');
   geo.deleteAttribute('normal');
   const pos = geo.attributes.position;

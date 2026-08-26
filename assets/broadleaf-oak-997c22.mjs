@@ -435,7 +435,8 @@ function blobTris(b) {
   }
   g.scale(b.s[0], b.s[1], b.s[2]);
   g.translate(b.c[0], b.c[1], b.c[2]);
-  return Array.from(g.toNonIndexed().attributes.position.array);
+  const nonIndexed = g.index ? g.toNonIndexed() : g;
+  return Array.from(nonIndexed.attributes.position.array);
 }
 
 function blobBuild(blobs) {
