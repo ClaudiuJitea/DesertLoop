@@ -3994,6 +3994,10 @@ function updateLap(racer) {
       if (!racer.finished) {
         racer.finished = true;
         racer.finishPlace = racers.filter((r) => r.finished).length;
+        // Assign staggered parking / cooldown slot well beyond the finish line
+        const stopDistance = 22 + (racer.finishPlace * 10);
+        racer.finishTargetT = (stopDistance / LOOP_LEN) % 1;
+        racer.finishTargetLane = (racer.finishPlace % 2 === 0 ? 1 : -1) * (ROAD_WIDTH * 0.5 - 1.8);
         if (racer.isPlayer) {
           showFinish(racer.finishPlace);
         }
@@ -4132,7 +4136,34 @@ function updateAI(racer, dt) {
     return;
   }
   if (racer.finished) {
-    racer.drive.speed *= 0.96;
+    const d = racer.drive;
+    const frac = (((progressAlongTrack(d.x, d.z) / LOOP_LEN) % 1) + 1) % 1;
+    const targetT = racer.finishTargetT !== undefined ? racer.finishTargetT : 0.025;
+    const targetLane = racer.finishTargetLane !== undefined ? racer.finishTargetLane : 2.5;
+
+    // Check if the car has arrived past its designated stopping slot
+    const pastTarget = (frac >= targetT && frac < 0.2) || (frac >= 0.2 && frac < 0.85);
+
+    if (pastTarget || d.speed <= 0.6) {
+      d.speed = Math.max(0, d.speed - 16 * dt);
+      if (d.speed > 0) {
+        d.x += Math.sin(d.yaw) * d.speed * dt;
+        d.z += Math.cos(d.yaw) * d.speed * dt;
+      }
+      applyPose(racer, 0);
+      updateVehicleEffects(racer, dt, false, d.speed > 0.1);
+      return;
+    }
+
+    // Guide the car forward along the track into its parking slot past the finish line
+    d.speed = Math.max(6, d.speed - 10 * dt);
+    const { p, tan, side } = frameAt(frac);
+    let tx = p.x + tan.x * 12 + side.x * targetLane;
+    let tz = p.z + tan.z * 12 + side.z * targetLane;
+    steerToward(d, tx, tz, 2.4, dt);
+
+    d.x += Math.sin(d.yaw) * d.speed * dt;
+    d.z += Math.cos(d.yaw) * d.speed * dt;
     applyPose(racer, 0);
     updateVehicleEffects(racer, dt, false, true);
     return;
