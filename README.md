@@ -32,8 +32,8 @@ Open [http://localhost:8765](http://localhost:8765).
 | `A` / `←` · `D` / `→` | Steer |
 | `N` | Use stored nitro |
 | `V` | Switch camera view (Chase / Inside cockpit) |
+| `P` | Power radio ON / OFF |
 | `T` / `]` / `[` | Next / previous radio station |
-| `M` | Mute / unmute radio |
 | Garage, Track & Radio UI | Choose car, track (Desert / City), lap count (3 or 5), and radio station |
 
 ## Tracks

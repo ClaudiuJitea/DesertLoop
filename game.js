@@ -36,6 +36,7 @@ const VEHICLES = [
     accel: 18,
     brake: 34,
     steer: 1.8,
+    rollFactor: 0.105,
     halfL: 2.15,
     halfW: 1.05,
   },
@@ -47,6 +48,7 @@ const VEHICLES = [
     accel: 20,
     brake: 34,
     steer: 1.65,
+    rollFactor: 0.091,
     halfL: 2.25,
     halfW: 1.05,
   },
@@ -58,6 +60,7 @@ const VEHICLES = [
     accel: 24,
     brake: 38,
     steer: 1.55,
+    rollFactor: 0.084,
     halfL: 2.2,
     halfW: 0.95,
   },
@@ -69,6 +72,7 @@ const VEHICLES = [
     accel: 22,
     brake: 38,
     steer: 2.05,
+    rollFactor: 0.070,
     halfL: 1.95,
     halfW: 0.92,
   },
@@ -123,8 +127,8 @@ const nitroPipsEl = document.getElementById('nitroPips');
 
 const introRadioEl = document.getElementById('introRadio');
 const introRadioTrackEl = document.getElementById('introRadioTrack');
+const introRadioPowerBtn = document.getElementById('introRadioPower');
 const introRadioPrevBtn = document.getElementById('introRadioPrev');
-const introRadioToggleBtn = document.getElementById('introRadioToggle');
 const introRadioNextBtn = document.getElementById('introRadioNext');
 const introRadioVolumeEl = document.getElementById('introRadioVolume');
 const introRadioVolNumEl = document.getElementById('introRadioVolNum');
@@ -134,8 +138,8 @@ const radioEqEl = document.getElementById('radioEq');
 const radioFreqBadgeEl = document.getElementById('radioFreqBadge');
 const radioTagEl = document.getElementById('radioTag');
 const radioTitleEl = document.getElementById('radioTitle');
+const radioPowerBtn = document.getElementById('radioPowerBtn');
 const radioPrevBtn = document.getElementById('radioPrevBtn');
-const radioToggleBtn = document.getElementById('radioToggleBtn');
 const radioNextBtn = document.getElementById('radioNextBtn');
 const radioVolumeEl = document.getElementById('radioVolume');
 const radioVolNumEl = document.getElementById('radioVolNum');
@@ -167,18 +171,17 @@ const RADIO_STATIONS = [
 
 class RadioManager {
   constructor() {
-    let savedIndex = 0;
-    let savedMuted = false;
+    const offIndex = RADIO_STATIONS.findIndex((s) => !s.src);
+    let lastActive = 0;
     let savedVol = 0.55;
     try {
       const idxStr = localStorage.getItem('desert_loop_radio_index');
       if (idxStr !== null) {
         const parsed = parseInt(idxStr, 10);
-        if (!isNaN(parsed) && parsed >= 0 && parsed < RADIO_STATIONS.length) {
-          savedIndex = parsed;
+        if (!isNaN(parsed) && parsed >= 0 && parsed < RADIO_STATIONS.length && RADIO_STATIONS[parsed].src) {
+          lastActive = parsed;
         }
       }
-      savedMuted = localStorage.getItem('desert_loop_radio_muted') === 'true';
       const volStr = localStorage.getItem('desert_loop_radio_vol');
       if (volStr !== null) {
         const parsedVol = parseFloat(volStr);
@@ -188,13 +191,15 @@ class RadioManager {
       }
     } catch (e) {}
 
-    this.currentIndex = savedIndex;
-    this.muted = savedMuted;
+    // Default to Radio OFF on page load
+    this.currentIndex = offIndex >= 0 ? offIndex : 2;
+    this.lastActiveStationIndex = lastActive;
+    this.muted = false;
     this.volume = savedVol;
     this.audio = new Audio();
     this.audio.loop = true;
-    this.audio.volume = this.muted ? 0 : this.volume;
-    this.audio.preload = 'auto';
+    this.audio.volume = this.volume;
+    this.audio.preload = 'none';
     this.unlocked = false;
 
     this.audio.addEventListener('play', () => this.updateUI());
@@ -206,7 +211,7 @@ class RadioManager {
       this.unlocked = true;
       removeEventListener('pointerdown', unlock);
       removeEventListener('keydown', unlock);
-      if (!this.muted && this.currentStation.src && this.audio.paused) {
+      if (this.currentStation.src && !this.muted && this.audio.paused) {
         this.audio.volume = this.volume;
         this.audio.play().catch(() => {});
       }
@@ -219,6 +224,24 @@ class RadioManager {
 
   get currentStation() {
     return RADIO_STATIONS[this.currentIndex] || RADIO_STATIONS[0];
+  }
+
+  togglePower(notify = true) {
+    const isCurrentlyOff = !this.currentStation.src;
+    if (isCurrentlyOff) {
+      const targetIndex = (this.lastActiveStationIndex !== undefined && RADIO_STATIONS[this.lastActiveStationIndex]?.src)
+        ? this.lastActiveStationIndex
+        : 0;
+      this.muted = false;
+      try {
+        localStorage.setItem('desert_loop_radio_muted', 'false');
+      } catch (e) {}
+      this.setStation(targetIndex, true, notify);
+    } else {
+      this.lastActiveStationIndex = this.currentIndex;
+      const offIndex = RADIO_STATIONS.findIndex((s) => !s.src);
+      this.setStation(offIndex >= 0 ? offIndex : 2, false, notify);
+    }
   }
 
   setVolume(vol) {
@@ -266,11 +289,14 @@ class RadioManager {
 
   setStation(index, autoPlay = true, notify = true) {
     this.currentIndex = (index + RADIO_STATIONS.length) % RADIO_STATIONS.length;
-    if (this.muted && this.currentStation.src) {
-      this.muted = false;
-      try {
-        localStorage.setItem('desert_loop_radio_muted', 'false');
-      } catch (e) {}
+    if (this.currentStation.src) {
+      this.lastActiveStationIndex = this.currentIndex;
+      if (this.muted) {
+        this.muted = false;
+        try {
+          localStorage.setItem('desert_loop_radio_muted', 'false');
+        } catch (e) {}
+      }
     }
     this.applyStation(autoPlay);
     if (notify && (mode === 'race' || mode === 'countdown')) {
@@ -279,7 +305,7 @@ class RadioManager {
       if (st.src) {
         announcePickup(player, 'radio', st.name, st.freq);
       } else {
-        announcePickup(player, 'radio', 'RADIO OFF', 'Muted');
+        announcePickup(player, 'radio', 'RADIO OFF', 'Powered Down');
       }
     }
   }
@@ -350,6 +376,11 @@ class RadioManager {
     if (introRadioTrackEl) {
       introRadioTrackEl.textContent = isOff ? 'Radio Off' : `${st.name} (${st.freq})`;
     }
+    if (introRadioPowerBtn) {
+      introRadioPowerBtn.classList.toggle('power-off', isOff);
+      introRadioPowerBtn.classList.toggle('power-on', !isOff);
+      introRadioPowerBtn.title = isOff ? 'Power Radio ON (P)' : 'Power Radio OFF (P)';
+    }
     if (introRadioEl) {
       introRadioEl.classList.toggle('muted', isMuted);
       introRadioEl.classList.toggle('off', isOff);
@@ -359,7 +390,7 @@ class RadioManager {
       introRadioVolumeEl.value = String(this.volume);
     }
     if (introRadioVolNumEl) {
-      introRadioVolNumEl.textContent = this.muted ? 'MUTED' : `${Math.round(this.volume * 100)}%`;
+      introRadioVolNumEl.textContent = this.muted ? 'MUTED' : isOff ? 'OFF' : `${Math.round(this.volume * 100)}%`;
     }
 
     if (radioTitleEl) {
@@ -370,6 +401,11 @@ class RadioManager {
     }
     if (radioTagEl) {
       radioTagEl.textContent = isOff ? 'OFF' : isPlaying ? 'LIVE' : 'PAUSED';
+    }
+    if (radioPowerBtn) {
+      radioPowerBtn.classList.toggle('power-off', isOff);
+      radioPowerBtn.classList.toggle('power-on', !isOff);
+      radioPowerBtn.title = isOff ? 'Power Radio ON (P)' : 'Power Radio OFF (P)';
     }
     if (radioEqEl) {
       radioEqEl.classList.toggle('playing', isPlaying);
@@ -385,7 +421,7 @@ class RadioManager {
       radioVolumeEl.value = String(this.volume);
     }
     if (radioVolNumEl) {
-      radioVolNumEl.textContent = this.muted ? 'MUTED' : `${Math.round(this.volume * 100)}%`;
+      radioVolNumEl.textContent = this.muted ? 'MUTED' : isOff ? 'OFF' : `${Math.round(this.volume * 100)}%`;
     }
   }
 }
@@ -543,13 +579,13 @@ raceBtn.addEventListener('click', () => startRace());
 document.getElementById('againBtn').addEventListener('click', () => startRace());
 document.getElementById('menuBtn').addEventListener('click', () => showMenu());
 
+introRadioPowerBtn?.addEventListener('click', (e) => { e.stopPropagation(); radioManager.togglePower(); });
 introRadioPrevBtn?.addEventListener('click', (e) => { e.stopPropagation(); radioManager.prevStation(); });
 introRadioNextBtn?.addEventListener('click', (e) => { e.stopPropagation(); radioManager.nextStation(); });
-introRadioToggleBtn?.addEventListener('click', (e) => { e.stopPropagation(); radioManager.toggleMute(); });
 
+radioPowerBtn?.addEventListener('click', (e) => { e.stopPropagation(); radioManager.togglePower(); });
 radioPrevBtn?.addEventListener('click', (e) => { e.stopPropagation(); radioManager.prevStation(); });
 radioNextBtn?.addEventListener('click', (e) => { e.stopPropagation(); radioManager.nextStation(); });
-radioToggleBtn?.addEventListener('click', (e) => { e.stopPropagation(); radioManager.toggleMute(); });
 
 const onVolumeSliderInput = (e) => {
   e.stopPropagation();
@@ -567,10 +603,10 @@ addEventListener('keydown', (e) => {
   if (e.code === 'KeyR' && mode === 'race') resetPlayer();
   if (e.code === 'KeyN' && mode === 'race' && !e.repeat) tryUseNitro();
   if (e.code === 'KeyV' && !e.repeat && (mode === 'race' || mode === 'countdown')) toggleCameraView();
+  if (e.code === 'KeyP' && !e.repeat) radioManager.togglePower();
   if (e.code === 'KeyT' && !e.repeat) radioManager.nextStation();
   if (e.code === 'BracketRight' && !e.repeat) radioManager.nextStation();
   if (e.code === 'BracketLeft' && !e.repeat) radioManager.prevStation();
-  if (e.code === 'KeyM' && !e.repeat) radioManager.toggleMute();
   if (e.code === 'Escape') showMenu();
 });
 addEventListener('keyup', (e) => keys.delete(e.code));
@@ -2178,16 +2214,63 @@ function placePowerups() {
 }
 
 function placeOilSlicks() {
-  const spots = [0.18, 0.43, 0.68, 0.91].map((t) => ({
-    t,
-    lane: (Math.random() < 0.5 ? -1 : 1) * 2.4,
-  }));
-  spots.forEach(({ t, lane }, index) => {
+  // Compute local track curvature (rad / m)
+  const getCurvature = (s) => {
+    const dt = 0.005;
+    const f1 = frameAt(s - dt);
+    const f2 = frameAt(s + dt);
+    let dyaw = Math.atan2(f2.tan.x, f2.tan.z) - Math.atan2(f1.tan.x, f1.tan.z);
+    while (dyaw > Math.PI) dyaw -= Math.PI * 2;
+    while (dyaw < -Math.PI) dyaw += Math.PI * 2;
+    return Math.abs(dyaw) / (2 * dt * LOOP_LEN);
+  };
+
+  // Evaluate candidate track positions away from start/finish line
+  const candidateScores = [];
+  for (let i = 12; i <= 88; i++) {
+    const t = i / 100;
+    // Check maximum curvature in a ±25m window around t (avoids placing on or entering stiff curves)
+    let maxCurv = 0;
+    for (let step = -15; step <= 15; step++) {
+      const c = getCurvature(t + step * 0.001);
+      if (c > maxCurv) maxCurv = c;
+    }
+    // Ensure candidate does not collide directly with boost pads or orbs
+    const tooCloseToPowerup = powerups.some((p) => Math.abs(p.t - t) < 0.035);
+    const tooCloseToBoost = boostPads.some((b) => Math.abs(b.t - t) < 0.035);
+    if (!tooCloseToPowerup && !tooCloseToBoost) {
+      candidateScores.push({ t, maxCurv });
+    }
+  }
+
+  // Sort candidates by straightest track segments (lowest curvature first)
+  candidateScores.sort((a, b) => a.maxCurv - b.maxCurv);
+
+  // Pick exactly 2 well-spaced oil spots (50% reduction from 4 spots) on straightaways
+  const selectedSpots = [];
+  for (const cand of candidateScores) {
+    if (selectedSpots.length === 0) {
+      selectedSpots.push(cand.t);
+    } else if (selectedSpots.length === 1) {
+      const diff = Math.abs(selectedSpots[0] - cand.t);
+      if (diff >= 0.32 && diff <= 0.68) {
+        selectedSpots.push(cand.t);
+        break;
+      }
+    }
+  }
+
+  if (selectedSpots.length < 2) {
+    selectedSpots.push(selectedSpots.length === 0 ? 0.15 : (selectedSpots[0] + 0.45) % 1);
+  }
+
+  selectedSpots.forEach((t, index) => {
     const { p, tan, side } = frameAt(t);
+    const lane = (index % 2 === 0 ? -1 : 1) * 2.2;
     const mesh = makeOilSlickMesh(index + 1);
     mesh.position.copy(p).addScaledVector(side, lane);
     mesh.position.y = 0.085;
-    mesh.rotation.y = Math.atan2(tan.x, tan.z) + (index % 2 === 0 ? 0.2 : -0.18);
+    mesh.rotation.y = Math.atan2(tan.x, tan.z) + (index % 2 === 0 ? 0.15 : -0.15);
     trackGroup.add(mesh);
     oilSlicks.push({ t, lane, mesh });
   });
@@ -2387,6 +2470,7 @@ window.__desertLoop = {
     setStation: (idx, notify = true) => radioManager.setStation(idx, true, notify),
     nextStation: (notify = true) => radioManager.nextStation(notify),
     prevStation: (notify = true) => radioManager.prevStation(notify),
+    togglePower: (notify = true) => radioManager.togglePower(notify),
     toggleMute: () => radioManager.toggleMute(),
     setVolume: (v) => { radioManager.volume = v; if (!radioManager.muted) radioManager.audio.volume = v; },
   },
@@ -3571,6 +3655,7 @@ async function spawnField(playerId) {
       id,
       def,
       mesh,
+      model: meshes[i],
       visualBounds,
       wheels: bindRig(mesh),
       isPlayer: i === 0,
@@ -3594,6 +3679,8 @@ async function spawnField(playerId) {
       // Fuel management is a player-only challenge; AI racers never run out.
       fuel: i === 0 ? 100 : Infinity,
       wrecked: false,
+      roll: 0,
+      pitch: 0,
       hitCooldown: 0,
       padCooldown: 0,
       oilCooldown: 0,
@@ -4154,7 +4241,7 @@ function updatePlayer(dt) {
   d.x += Math.sin(moveYaw) * d.speed * dt;
   d.z += Math.cos(moveYaw) * d.speed * dt;
   resolveCollisions(racer);
-  applyPose(racer, steerInput);
+  applyPose(racer, steerInput, dt);
   updateVehicleEffects(racer, dt, accelerating, braking || reversePressed);
   updateLap(racer);
   updateSpeedometer(d.speed, racer.boostT > 0 || racer.onPad);
@@ -4187,7 +4274,7 @@ function updateAiReverse(racer, dt) {
   d.x += Math.sin(d.yaw) * d.speed * dt;
   d.z += Math.cos(d.yaw) * d.speed * dt;
   resolveCollisions(racer);
-  applyPose(racer, -racer.avoidDirection);
+  applyPose(racer, -racer.avoidDirection, dt);
   updateVehicleEffects(racer, dt, false, true);
   updateLap(racer);
   if (racer.reverseT <= 0) {
@@ -4201,7 +4288,7 @@ function updateAiReverse(racer, dt) {
 function updateAI(racer, dt) {
   if (racer.wrecked) {
     racer.drive.speed = 0;
-    applyPose(racer, 0);
+    applyPose(racer, 0, dt);
     updateVehicleEffects(racer, dt, false, false);
     return;
   }
@@ -4243,7 +4330,7 @@ function updateAI(racer, dt) {
       d.yaw += yawDiff * (1 - Math.exp(-6 * dt));
 
       resolveCollisions(racer);
-      applyPose(racer, 0);
+      applyPose(racer, 0, dt);
       updateVehicleEffects(racer, dt, false, d.speed > 0.1);
       return;
     }
@@ -4262,7 +4349,7 @@ function updateAI(racer, dt) {
     d.x += Math.sin(d.yaw) * d.speed * dt;
     d.z += Math.cos(d.yaw) * d.speed * dt;
     resolveCollisions(racer);
-    applyPose(racer, 0);
+    applyPose(racer, 0, dt);
     updateVehicleEffects(racer, dt, false, true);
     return;
   }
@@ -4397,25 +4484,66 @@ function updateAI(racer, dt) {
   applyPose(racer, THREE.MathUtils.clamp(
     Math.atan2(Math.sin(Math.atan2(tx - d.x, tz - d.z) - d.yaw), Math.cos(Math.atan2(tx - d.x, tz - d.z) - d.yaw)) * 2,
     -1, 1
-  ));
+  ), dt);
   updateVehicleEffects(racer, dt, accelerating, !accelerating);
   updateLap(racer);
 }
 
-function applyPose(racer, steerInput) {
+function applyPose(racer, steerInput = 0, dt = 0.016) {
   const d = racer.drive;
   d.x = THREE.MathUtils.clamp(d.x, -280, 280);
   d.z = THREE.MathUtils.clamp(d.z, -200, 340);
   const sank = racer.wrecked ? -0.06 : 0;
   racer.mesh.position.set(d.x, sank, d.z);
   racer.mesh.rotation.y = d.yaw;
-  racer.mesh.rotation.z = racer.wrecked ? 0.12 : 0;
-  racer.mesh.rotation.x = racer.wrecked ? 0.04 : 0;
-  const spin = (d.speed * 0.016) / 0.34;
+  racer.mesh.rotation.z = 0;
+  racer.mesh.rotation.x = 0;
+
+  // Track dynamic yaw change rate (angular cornering velocity)
+  const currentYaw = d.yaw;
+  let yawDelta = currentYaw - (racer.lastYaw !== undefined ? racer.lastYaw : currentYaw);
+  while (yawDelta > Math.PI) yawDelta -= Math.PI * 2;
+  while (yawDelta < -Math.PI) yawDelta += Math.PI * 2;
+  racer.lastYaw = currentYaw;
+  const yawRate = THREE.MathUtils.clamp((yawDelta / Math.max(1e-4, dt || 0.016)) * 0.45, -1, 1);
+
+  // Dynamic car body tilt (roll) in curves
+  const rollMax = racer.def?.rollFactor || 0.084;
+  const speedRatio = THREE.MathUtils.clamp(Math.abs(d.speed) / 16, 0, 1.35);
+  const steerClamped = THREE.MathUtils.clamp(steerInput, -1, 1);
+  const combinedSteer = Math.abs(steerClamped) > 0.05 ? (steerClamped * 0.65 + yawRate * 0.35) : yawRate;
+  const slipEffect = racer.slipT > 0 ? (racer.slipAngle || 0) * 0.38 : 0;
+
+  const targetRoll = THREE.MathUtils.clamp(
+    (combinedSteer * speedRatio + slipEffect) * rollMax,
+    -rollMax * 1.35,
+    rollMax * 1.35
+  );
+
+  // Smooth suspension spring response
+  if (racer.roll === undefined) racer.roll = 0;
+  const springRate = 14.0;
+  racer.roll += (targetRoll - racer.roll) * (1 - Math.exp(-springRate * (dt || 0.016)));
+
+  // Dynamic pitch (rear squat on acceleration/boost, front dive on braking)
+  const isBraking = racer.isPlayer && (keys.has('Space') || keys.has('KeyS') || keys.has('ArrowDown'));
+  const isBoosting = racer.boostT > 0 || racer.onPad;
+  const targetPitch = isBraking ? -0.028 : isBoosting ? 0.021 : (d.speed > 6 ? 0.008 : 0);
+  if (racer.pitch === undefined) racer.pitch = 0;
+  racer.pitch += (targetPitch - racer.pitch) * (1 - Math.exp(10.0 * -(dt || 0.016)));
+
+  // Apply tilt to the child vehicle model in its own local coordinate system
+  const modelObj = racer.model || racer.mesh.children[0];
+  if (modelObj) {
+    modelObj.rotation.z = racer.wrecked ? 0.14 : -racer.roll;
+    modelObj.rotation.x = racer.wrecked ? 0.04 : racer.pitch;
+  }
+
+  const spin = (d.speed * (dt || 0.016)) / 0.34;
   for (const key of ['fl', 'fr', 'rl', 'rr']) {
     if (racer.wheels[key]) racer.wheels[key].rotation.x += spin;
   }
-  const ang = steerInput * THREE.MathUtils.degToRad(28);
+  const ang = steerClamped * THREE.MathUtils.degToRad(28);
   if (racer.wheels.steerFl) racer.wheels.steerFl.rotation.y = ang;
   if (racer.wheels.steerFr) racer.wheels.steerFr.rotation.y = ang;
 }
@@ -4611,7 +4739,7 @@ function updateFinishedRacers(dt) {
       d.yaw += yawDiff * (1 - Math.exp(-6 * dt));
 
       resolveCollisions(r);
-      applyPose(r, 0);
+      applyPose(r, 0, dt);
       updateVehicleEffects(r, dt, false, d.speed > 0.1);
       continue;
     }
@@ -4630,13 +4758,13 @@ function updateFinishedRacers(dt) {
     d.x += Math.sin(d.yaw) * d.speed * dt;
     d.z += Math.cos(d.yaw) * d.speed * dt;
     resolveCollisions(r);
-    applyPose(r, 0);
+    applyPose(r, 0, dt);
     updateVehicleEffects(r, dt, false, d.speed > 0.2);
   }
 
   resolveRacerCollisions();
   for (const r of racers) {
-    applyPose(r, 0);
+    applyPose(r, 0, dt);
   }
 }
 
