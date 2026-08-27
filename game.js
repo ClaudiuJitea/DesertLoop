@@ -2575,21 +2575,43 @@ let viewBlendT = 0;
 let targetViewBlendT = 0;
 const CHASE_FOV = 49;
 const BOOST_FOV = 59;
-const COCKPIT_FOV = 60;
-const COCKPIT_BOOST_FOV = 72;
+const COCKPIT_FOV = 65;
+const COCKPIT_BOOST_FOV = 76;
 let chaseFov = CHASE_FOV;
+
+function getChaseOffset(vehicleId) {
+  switch (vehicleId) {
+    case 'camper-van-8d10e2':
+      // Tall van body: tuned height looking smoothly over roof down the asphalt
+      return { pos: new THREE.Vector3(0, 8.5, -17.5), look: new THREE.Vector3(0, 1.8, 7.0) };
+    case 'pickup-truck-70s-8c0080':
+      // Tall utility cab: pulled back chase viewpoint for full truck & open road view
+      return { pos: new THREE.Vector3(0, 9.0, -21.0), look: new THREE.Vector3(0, 1.65, 4.5) };
+    case 'muscle-car-60s-524d46':
+      // Low muscle car: standard perfect baseline
+      return { pos: new THREE.Vector3(0, 7.2, -14.5), look: new THREE.Vector3(0, 1.45, 4.5) };
+    case 'hatchback-80s-e95554':
+    default:
+      // Compact hatchback: moved camera back for greater road and car visibility
+      return { pos: new THREE.Vector3(0, 7.5, -16.2), look: new THREE.Vector3(0, 1.50, 4.5) };
+  }
+}
 
 function getCockpitOffset(vehicleId) {
   switch (vehicleId) {
     case 'camper-van-8d10e2':
-      return { pos: new THREE.Vector3(0.28, 1.66, 0.65), look: new THREE.Vector3(0.24, 1.38, 32) };
+      // Left driver seat in front van cabin showing right nose and road
+      return { pos: new THREE.Vector3(0.40, 1.56, 1.95), look: new THREE.Vector3(0.12, 1.15, 36) };
     case 'pickup-truck-70s-8c0080':
-      return { pos: new THREE.Vector3(0.24, 1.42, 0.35), look: new THREE.Vector3(0.20, 1.18, 32) };
+      // Left driver seat with natural perspective showing the hood stretching to the right front corner
+      return { pos: new THREE.Vector3(0.40, 1.38, 0.98), look: new THREE.Vector3(0.10, 1.10, 36) };
     case 'muscle-car-60s-524d46':
-      return { pos: new THREE.Vector3(0.22, 1.16, 0.20), look: new THREE.Vector3(0.18, 0.98, 32) };
+      // Left muscle car driver seat
+      return { pos: new THREE.Vector3(0.34, 1.16, 0.20), look: new THREE.Vector3(0.12, 0.98, 32) };
     case 'hatchback-80s-e95554':
     default:
-      return { pos: new THREE.Vector3(0.20, 1.20, 0.18), look: new THREE.Vector3(0.16, 1.02, 32) };
+      // Left hatchback driver seat
+      return { pos: new THREE.Vector3(0.34, 1.26, 0.75), look: new THREE.Vector3(0.10, 1.05, 34) };
   }
 }
 
@@ -3746,7 +3768,9 @@ function applyDamage(racer, amount, impact = null) {
     racer.slipT = 0;
     racer.slipAngle = 0;
     syncVisualDamage(racer, true);
-    if (racer.isPlayer) showLoss('Your car reached 100% damage and is totaled.');
+    if (racer.isPlayer && (mode === 'race' || mode === 'countdown')) {
+      showLoss('Totaled! Your car took 100% critical damage.');
+    }
   }
 }
 
@@ -4245,6 +4269,11 @@ function updatePlayer(dt) {
   updateVehicleEffects(racer, dt, accelerating, braking || reversePressed);
   updateLap(racer);
   updateSpeedometer(d.speed, racer.boostT > 0 || racer.onPad);
+
+  if (racer.fuel <= 0 && Math.abs(d.speed) <= 0.4 && mode === 'race') {
+    d.speed = 0;
+    showLoss('Out of fuel! You ran dry and could not reach the finish line.');
+  }
 }
 
 function chooseAiPassingLane(racer, p, side) {
@@ -4611,15 +4640,15 @@ function updateCamera(dt) {
       const orbit = player.drive.yaw + orbitElapsed * 0.42;
       const targetY = player.mesh.position.y + 0.75;
       camera.position.set(
-        player.mesh.position.x + Math.sin(orbit) * 7.5,
-        targetY + 2.4,
-        player.mesh.position.z + Math.cos(orbit) * 7.5
+        player.mesh.position.x + Math.sin(orbit) * 7.6,
+        targetY + 2.3,
+        player.mesh.position.z + Math.cos(orbit) * 7.6
       );
       if (camera.fov !== 42) {
         camera.fov = 42;
         camera.updateProjectionMatrix();
       }
-      camera.lookAt(player.mesh.position.x, targetY, player.mesh.position.z);
+      camera.lookAt(player.mesh.position.x, targetY + 0.32, player.mesh.position.z);
 
       if (!finishEl.classList.contains('show')) {
         showFinishModal(finishPlaceSaved);
@@ -4634,15 +4663,15 @@ function updateCamera(dt) {
     const orbit = player.drive.yaw + elapsed * 0.42;
     const targetY = player.mesh.position.y + 0.75;
     camera.position.set(
-      player.mesh.position.x + Math.sin(orbit) * 7.4,
-      targetY + 2.5,
-      player.mesh.position.z + Math.cos(orbit) * 7.4
+      player.mesh.position.x + Math.sin(orbit) * 7.6,
+      targetY + 2.3,
+      player.mesh.position.z + Math.cos(orbit) * 7.6
     );
     if (camera.fov !== 42) {
       camera.fov = 42;
       camera.updateProjectionMatrix();
     }
-    camera.lookAt(player.mesh.position.x, targetY, player.mesh.position.z);
+    camera.lookAt(player.mesh.position.x, targetY + 0.32, player.mesh.position.z);
     return;
   }
 
@@ -4660,11 +4689,12 @@ function updateCamera(dt) {
   const yawFollowRate = 2.4 + ease * 4.5;
   cameraYaw += yawDelta * (1 - Math.exp(-yawFollowRate * dt));
 
-  // Chase view world coordinates
+  // Chase view world coordinates tailored per vehicle
+  const chase = getChaseOffset(player.def.id);
   _q.setFromAxisAngle(_y, cameraYaw);
-  const chaseWorldPos = camOffset.clone().applyQuaternion(_q).add(player.mesh.position);
+  const chaseWorldPos = chase.pos.clone().applyQuaternion(_q).add(player.mesh.position);
   _q.setFromAxisAngle(_y, player.drive.yaw);
-  const chaseWorldLook = camLook.clone().applyQuaternion(_q).add(player.mesh.position);
+  const chaseWorldLook = chase.look.clone().applyQuaternion(_q).add(player.mesh.position);
 
   // Cockpit view world coordinates
   const cockpit = getCockpitOffset(player.def.id);
@@ -4701,8 +4731,8 @@ function updateCamera(dt) {
 }
 
 function updateFinishedRacers(dt) {
-  for (const r of racers) {
-    if (!r.drive) continue;
+  const finishedRacers = racers.filter((r) => r.finished && r.drive);
+  for (const r of finishedRacers) {
     const d = r.drive;
     const frac = (((progressAlongTrack(d.x, d.z) / LOOP_LEN) % 1) + 1) % 1;
     const targetT = r.finishTargetT !== undefined ? r.finishTargetT : 0.03;
@@ -4763,7 +4793,7 @@ function updateFinishedRacers(dt) {
   }
 
   resolveRacerCollisions();
-  for (const r of racers) {
+  for (const r of finishedRacers) {
     applyPose(r, 0, dt);
   }
 }
@@ -4847,8 +4877,7 @@ function showMenu() {
   finishCinematicStart = null;
   introEl.classList.remove('hidden');
   hudEl.classList.remove('on');
-  finishEl.classList.remove('show');
-  finishEl.classList.remove('loss');
+  finishEl.classList.remove('show', 'loss', 'win');
   countdownEl.classList.remove('show');
   clearRacers();
   updateSpeedometer(0, false);
@@ -4872,8 +4901,7 @@ async function startRace() {
   finishCinematicStart = null;
   radioManager.ensurePlaying();
   introEl.classList.add('hidden');
-  finishEl.classList.remove('show');
-  finishEl.classList.remove('loss');
+  finishEl.classList.remove('show', 'loss', 'win');
   lapTotalEl.textContent = String(totalLaps);
   lapCountEl.textContent = '1';
   damageValueEl.textContent = '0%';
@@ -4915,20 +4943,23 @@ function showFinish(place) {
 
 function showFinishModal(place) {
   finishEl.classList.remove('loss');
+  finishEl.classList.toggle('win', place === 1);
   const currentTrackName = (TRACKS.find((t) => t.id === selectedTrackId) || TRACKS[0]).name;
   finishTitle.textContent = place === 1 ? 'You win!' : `${ordinal(place)} place`;
   finishMsg.textContent = place === 1
-    ? `Clean run around ${currentTrackName}.`
-    : 'Hit Race again or head back to the garage.';
+    ? `Clean run around ${currentTrackName}!`
+    : `Finished in ${ordinal(place)} place around ${currentTrackName}.`;
   finishEl.classList.add('show');
 }
 
 function showLoss(message) {
+  if (mode === 'finish') return;
   mode = 'finish';
   finishCinematicStart = null;
   lossOrbitStart = clock.elapsedTime;
   finishTitle.textContent = 'Race lost';
   finishMsg.textContent = message;
+  finishEl.classList.remove('win');
   finishEl.classList.add('loss');
   finishEl.classList.add('show');
 }
@@ -4967,8 +4998,17 @@ renderer.setAnimationLoop(() => {
       resolveRacerCollisions();
       updatePowerups(dt);
       updatePlaceHud();
-    } else if (mode === 'finish' && finishCinematicStart !== null) {
+    } else if (mode === 'finish') {
+      // 1. Keep active AI racers competing full throttle to cross the finish line
+      for (const r of racers) {
+        if (r.ai && !r.finished) {
+          updateAI(r, dt);
+        }
+      }
+      // 2. Guide finished racers into their designated parking slots
       updateFinishedRacers(dt);
+      resolveRacerCollisions();
+      updatePowerups(dt);
     }
     updateCamera(dt);
     const player = racers.find((r) => r.isPlayer);

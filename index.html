@@ -1747,42 +1747,91 @@
       inset: 0;
       z-index: 8;
       display: none;
-      place-items: center;
-      background: rgba(26, 31, 38, 0.18);
-      backdrop-filter: none;
+      align-items: flex-end;
+      justify-content: center;
+      padding: 0 20px 28px;
+      background: linear-gradient(to top, rgba(18, 22, 28, 0.52) 0%, rgba(18, 22, 28, 0.1) 36%, transparent 65%);
       pointer-events: none;
     }
-    #finish.show { display: grid; }
-    #finish.loss {
-      align-items: end;
-      background: rgba(26, 31, 38, 0.12);
-      backdrop-filter: none;
-      pointer-events: none;
-    }
+    #finish.show { display: flex; }
     #finish .card {
-      background: var(--cream);
-      padding: 36px 40px;
+      background: rgba(26, 31, 38, 0.94);
+      color: #f3ecdc;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-top: 3px solid var(--accent);
+      padding: 20px 30px 22px;
       border-radius: 16px;
       text-align: center;
-      max-width: 420px;
-      animation: rise 0.4s ease both;
+      max-width: 440px;
+      width: 100%;
+      box-shadow: 0 16px 42px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(0, 0, 0, 0.2);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      animation: rise 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
       pointer-events: auto;
     }
-    #finish.loss .card {
-      margin: 0 0 22px;
-      padding: 18px 24px;
-      background: rgba(243, 236, 220, 0.94);
-      box-shadow: 0 12px 30px rgba(26, 31, 38, 0.2);
+    #finish.win .card {
+      border-top-color: #48bb78;
     }
-    #finish.loss h2 { font-size: 34px; }
+    #finish.loss .card {
+      border-top-color: #e53e3e;
+    }
     #finish h2 {
       font-family: "Bebas Neue", sans-serif;
-      font-size: 48px;
-      margin: 0 0 8px;
-      letter-spacing: 0.06em;
+      font-size: 38px;
+      line-height: 1;
+      margin: 0 0 6px;
+      letter-spacing: 0.05em;
+      color: #f3ecdc;
     }
-    #finish p { margin: 0 0 20px; opacity: 0.7; }
-    #finish .btn { pointer-events: auto; margin: 0 6px; }
+    #finish.win h2 {
+      color: #68d391;
+      text-shadow: 0 0 20px rgba(72, 187, 120, 0.35);
+    }
+    #finish.loss h2 {
+      color: #fc8181;
+      text-shadow: 0 0 20px rgba(229, 62, 62, 0.35);
+    }
+    #finish p {
+      font-size: 13.5px;
+      line-height: 1.4;
+      margin: 0 0 16px;
+      color: rgba(243, 236, 220, 0.78);
+      font-weight: 500;
+    }
+    #finish .finish-actions {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+    }
+    #finish .btn {
+      pointer-events: auto;
+      min-width: 125px;
+      padding: 9px 18px;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      border-radius: 8px;
+    }
+    #finish .btn.primary {
+      background: var(--accent);
+      color: #fff;
+      box-shadow: 0 4px 14px rgba(217, 83, 30, 0.4);
+    }
+    #finish .btn.primary:hover {
+      background: #ea6026;
+      transform: translateY(-1px);
+    }
+    #finish .btn:not(.primary) {
+      background: rgba(255, 255, 255, 0.08);
+      color: #f3ecdc;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+    #finish .btn:not(.primary):hover {
+      background: rgba(255, 255, 255, 0.15);
+      color: #fff;
+      transform: translateY(-1px);
+    }
   </style>
 </head>
 <body>
@@ -2010,8 +2059,10 @@
     <div class="card">
       <h2 id="finishTitle">Finished</h2>
       <p id="finishMsg"></p>
-      <button class="btn primary" id="againBtn" type="button">Race again</button>
-      <button class="btn" id="menuBtn" type="button">Garage</button>
+      <div class="finish-actions">
+        <button class="btn primary" id="againBtn" type="button">Race again</button>
+        <button class="btn" id="menuBtn" type="button">Garage</button>
+      </div>
     </div>
   </div>
 
