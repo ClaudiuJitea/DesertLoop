@@ -2592,8 +2592,8 @@ function getChaseOffset(vehicleId) {
       return { pos: new THREE.Vector3(0, 7.2, -14.5), look: new THREE.Vector3(0, 1.45, 4.5) };
     case 'hatchback-80s-e95554':
     default:
-      // Compact hatchback: moved camera back for greater road and car visibility
-      return { pos: new THREE.Vector3(0, 7.5, -16.2), look: new THREE.Vector3(0, 1.50, 4.5) };
+      // Compact hatchback: pulled back camera for wider road and car visibility
+      return { pos: new THREE.Vector3(0, 7.8, -17.8), look: new THREE.Vector3(0, 1.50, 4.0) };
   }
 }
 
@@ -2610,8 +2610,8 @@ function getCockpitOffset(vehicleId) {
       return { pos: new THREE.Vector3(0.34, 1.16, 0.20), look: new THREE.Vector3(0.12, 0.98, 32) };
     case 'hatchback-80s-e95554':
     default:
-      // Left hatchback driver seat
-      return { pos: new THREE.Vector3(0.34, 1.26, 0.75), look: new THREE.Vector3(0.10, 1.05, 34) };
+      // Left hatchback driver seat positioned slightly back
+      return { pos: new THREE.Vector3(0.34, 1.26, 0.58), look: new THREE.Vector3(0.10, 1.05, 34) };
   }
 }
 
