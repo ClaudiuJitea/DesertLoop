@@ -1,0 +1,86 @@
+/* A scrollable race hub and an accessible, separate performance workshop. */
+#intro { overflow-y: auto; }
+.intro-layout { min-height: min(800px, 100%); height: auto; padding-top: 90px; padding-bottom: 48px; }
+.intro-hero { padding-bottom: 0; }
+.brand { font-size: clamp(66px, 7vw, 108px); }
+.tagline { margin-top: 10px; }
+.hero-badges { margin-top: 14px; }
+.career-card { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-top: 24px; padding: 16px 18px; border: 1px solid #ffffff35; border-radius: 12px; background: #13222e; color: #eaf0f6; max-width: 430px; box-shadow: 0 12px 30px #17202b20; }
+.career-card > div { display: grid; gap: 5px; }
+.career-card small { font-size: 9px; letter-spacing: .18em; color: #a5bbca; }
+.career-card strong { font: 32px 'Bebas Neue', sans-serif; }
+.career-card strong em { font: normal 11px 'DM Sans',sans-serif; color: #ffbb77; }
+#careerWins { font-size: 10px; color: #b2c7d9; }
+#openWorkshop { padding: 12px; background: #ffb76b; color: #18232c; border: 0; border-radius: 8px; font: 700 14px 'DM Sans',sans-serif; cursor: pointer; }
+#openWorkshop span { display: block; font-size: 9px; font-weight: 400; margin-top: 4px; }
+#careerSave { font-size: 10px; margin-top: 8px; opacity: .7; }
+.intro-actions { flex-wrap: wrap; align-items: center; }
+.track-pick { flex: 1 1 480px; }
+.track-pick .track-btns { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 7px; width: 100%; }
+.track-pick button { display: flex; align-items: center; gap: 7px; text-align: left; min-height: 62px; padding: 8px; }
+.track-pick button svg { width: 39px; height: 39px; flex: none; }
+.track-pick button path { fill: none; stroke: currentColor; stroke-width: 2.5; stroke-linejoin: round; }
+.track-pick button span { font-size: 11px; letter-spacing: 0; }
+.track-pick button small { display: block; font-size: 8px; font-weight: 400; margin-top: 3px; opacity: .7; }
+#trackDescription { font-size: 11px; margin: 10px 0 0; color: #46525c; }
+.menu-hint { position: relative; bottom: auto; padding: 0 16px 16px; }
+button:disabled { cursor: not-allowed; opacity: .45; }
+.race-reward { display: grid; gap: 7px; margin: 16px 0 22px; }
+.race-reward strong { color: #ffc786; font-size: 16px; letter-spacing: .05em; }
+.race-reward span { font-size: 11px; color: #b0c6d6; }
+#finish .finish-actions { flex-wrap: wrap; }
+#finish .btn { min-width: 0; flex: 1; padding-inline: 12px; }
+#workshop { width: min(1000px, calc(100vw - 28px)); max-height: calc(100dvh - 28px); padding: 0; border: 1px solid #a5bfd23b; border-radius: 18px; background: #101c28; color: #edf3f8; box-shadow: 0 30px 120px #0009; }
+#workshop::backdrop { background: #06101bd9; }
+.workshop-header { display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 22px 28px; border-bottom: 1px solid #c6d8e51a; }
+.workshop-header small { color: #f8bc7b; font-size: 9px; letter-spacing: .17em; }
+.workshop-header h2 { font: 38px 'Bebas Neue',sans-serif; margin: 6px 0 0; }
+#closeWorkshop { color: #dceaf4; border: 1px solid #94aec344; padding: 10px 15px; border-radius: 7px; background: #243343; cursor: pointer; }
+.workshop-layout { display: grid; grid-template-columns: 1fr 1fr; }
+.workshop-showroom, .workshop-upgrades { padding: 24px; min-width: 0; }
+.workshop-showroom { background: radial-gradient(ellipse at 50% 40%, #41506055, transparent 65%); border-right: 1px solid #c6d8e518; }
+.workshop-showroom label { display: block; font-size: 9px; letter-spacing: .18em; color: #9db8cf; margin-bottom: 8px; }
+#workshopCar { width: 100%; padding: 10px 12px; border-radius: 7px; background: #253545; color: #edf3f8; border: 1px solid #a1b9cd40; font: 16px 'DM Sans',sans-serif; }
+.preview-stage { height: 250px; position: relative; background: radial-gradient(ellipse at 50% 72%, #050a1044 0%, transparent 55%); }
+#garagePreview { display: block; width: 100%; height: 100%; }
+#previewStatus { min-height: 28px; font-size: 10px; color: #9fb8cc; text-align: center; }
+#workshopStats { font-size: 11px; line-height: 1.7; padding-block: 14px; border-block: 1px solid #a1b9cd20; color: #f5c693; }
+.workshop-showroom h3 { font-size: 14px; margin-top: 20px; }
+.workshop-showroom h3 small { display: block; margin-top: 5px; font-weight: 400; color: #8ea8bc; font-size: 10px; }
+#paintOptions { display: grid; grid-template-columns: repeat(3,1fr); gap: 7px; }
+#paintOptions button { display: flex; align-items: center; gap: 5px; color: #d4e1ec; background: #203040; border: 1px solid transparent; border-radius: 6px; padding: 9px 6px; font-size: 10px; cursor: pointer; }
+#paintOptions button::before { content: ''; width: 12px; height: 12px; border-radius: 50%; background: var(--paint); }
+#paintOptions button[aria-pressed=true] { border-color: #ffbb78; }
+.workshop-wallet { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.workshop-wallet span { font-size: 9px; letter-spacing: .12em; color: #a4bed1; }
+.workshop-wallet strong { font: 28px 'Bebas Neue',sans-serif; color: #ffc58a; }
+.upgrade-card { padding: 15px; border: 1px solid #a1b9cd24; border-radius: 10px; margin-bottom: 10px; background: #182838; }
+.upgrade-card h3 { margin: 0; font-size: 15px; }
+.upgrade-card h3 small { float: right; font-size: 10px; color: #fbc58d; }
+.upgrade-card p { font-size: 11px; line-height: 1.6; color: #a8bdd0; margin-block: 7px 10px; }
+.upgrade-levels { display: flex; gap: 5px; margin-bottom: 12px; }
+.upgrade-levels i { width: 28px; height: 3px; background: #425363; }
+.upgrade-levels i.filled { background: #ffbe7d; }
+.upgrade-card button { width: 100%; padding: 9px; background: #ffbb78; border: 0; border-radius: 5px; font: 700 11px 'DM Sans',sans-serif; color: #16212b; cursor: pointer; }
+.upgrade-card button:disabled { background: #384a5b; color: #adc1d2; }
+.earning-guide, #workshopSave { font-size: 10px; line-height: 1.7; color: #9db3c5; }
+#workshopNotice { color: #9ee0c1; font-size: 11px; min-height: 20px; }
+@media (max-width: 900px) { .intro-layout { grid-template-columns: 1fr 1fr; } .intro-hero { grid-column: 1; grid-row: 1; } .intro-feature { grid-column: 2; grid-row: 1; width: 100%; } .intro-dock { grid-column: 1/-1; } .career-card { gap: 10px; padding: 12px; } }
+@media (max-width: 680px) { .intro-layout { display: flex; flex-direction: column; gap: 14px; padding-top: 84px; } .intro-hero { width: 100%; } .intro-feature { width: 100%; height: 280px; } .intro-dock { width: 100%; } .track-pick .track-btns { grid-template-columns: 1fr 1fr; } .workshop-layout { grid-template-columns: 1fr; } .workshop-header, .workshop-showroom, .workshop-upgrades { padding: 18px; } .preview-stage { height: 220px; } .brand { font-size: 68px; } }
+/* Four route cards need a full-width setup row, not the old 205px sidebar. */
+.intro-dock { grid-template-columns: minmax(0,1fr); }
+.intro-actions { display: grid; grid-template-columns: minmax(0,1fr) 100px 150px; grid-template-areas: "track laps race"; align-items: end; gap: 18px; }
+.intro-actions::before { display: none; }
+.intro-actions .track-pick { grid-area: track; }
+.intro-actions .laps-pick { grid-area: laps; }
+.intro-actions #raceBtn { grid-area: race; width: 150px; justify-self: end; }
+.track-pick { min-width: 0; display: block; }
+.track-pick > span { display: block; margin-bottom: 7px; font-size: 9px; letter-spacing: .14em; }
+.laps-pick { flex-direction: column; align-items: flex-start; gap: 7px; }
+#trackDescription { color: #b2c2cf; margin: 0 4px 4px; }
+.menu-hint { right: auto; text-align: center; color: #52616b; }
+@media (max-width: 1050px) {
+  .intro-actions { grid-template-columns: minmax(0,1fr) 150px; grid-template-areas: "track track" "laps race"; }
+  .laps-pick { flex-direction: row; align-items: center; }
+}
+@media (max-width: 680px) { .intro-layout { min-height: 0; } .intro-actions { gap: 12px; } }

@@ -1,0 +1,149 @@
+/* Shared desert palette: parchment, charcoal, sandstone and oxidized copper. */
+:root {
+  --theme-paper: #ede2cc;
+  --theme-ink: #292c2b;
+  --theme-muted: #756b5c;
+  --theme-accent: #ad5935;
+  --theme-panel: rgba(44, 43, 38, .91);
+  --theme-line: rgba(133, 111, 77, .28);
+}
+#hud::before { background: linear-gradient(#29231c1a, transparent 22%, transparent 72%, #29231c24); }
+#hud .panel, #hud .meter { background: var(--theme-panel); border-color: #eadcc328; box-shadow: 0 6px 18px #241b1422; }
+#hud { color: #eee4d2; }
+#title { color: #eee0c8; text-shadow: 0 1px 6px #30261c88; }
+#title::before, #title::after { color: #dbc2a0; }
+#hud #place, #hud #lap { background: var(--theme-paper); color: var(--theme-ink); border-color: #bda98a !important; }
+#place::before { color: #766956; }
+#radioHud { border-left-color: #ba7952; }
+#speedo .ring-outer { fill: #dac9a8; stroke: #b5a17f; }
+#speedo .ring-inner { fill: #292d2e; }
+#speedo .ring-bevel { stroke: #f3e8d32b; }
+#speedo .track { stroke: #e9dcc42a; }
+#speedo .progress { stroke: #cb946b; filter: none; }
+#speedo .needle-shaft { fill: #d6a17c; }
+#speedo .label, #speedo .tick { fill: #d9cbb4; stroke: none; }
+#speedo .tick { stroke: #d9cbb466; }
+#speedo .tick.major { stroke: #e6d9bf; }
+#speedValue { fill: #f4ecdf; }
+#driveState, .speed-unit { fill: #d0bda0; }
+#speedo.boost .progress, #speedo.boost .needle-shaft { stroke: #d88d4f; }
+#speedo.boost .needle-shaft { fill: #d88d4f; }
+#speedo.boost #driveState { fill: #efb477; }
+#speedo.boost { filter: drop-shadow(0 0 8px #b7703833); }
+#hud .hud-kicker, #cornerPreview small, #lapTiming small { color: #c2b299; }
+#raceProgress, #nitroHud.ready .nitro-pip.on { background: #c98b54; box-shadow: none; }
+#hud.nitro-active .meter#nitroHud { border-color: #c98b5488; box-shadow: none; }
+#cornerPreview { background: #302d27c9; border-color: #dac6a52b; }
+#cornerPreview b { color: #e6d9bf; }
+#cornerPreview.tight b { color: #d99b67; }
+.standing-row b, .standing-row small { color: #c2b299; }
+.standing-row.you { background: #d4b88c16; border-left-color: #c98b54; color: #ecd4b1; }
+.standing-row.you b, .standing-row.you small, #bestLap { color: #ecd4b1; }
+#raceBoard i { color: #afbf93; }
+#circuitRoute { stroke: #c2b39888; }
+#circuitStart, .map-player { fill: #d6a06f; }
+.map-player, .map-rival { stroke: #33312a; }
+.map-legend { color: #e5bd91; }
+.map-legend span { color: #d9cdb8; }
+#lapAlert { border-color: #ba7952; background: linear-gradient(90deg, transparent, #302a22eb 18%, #302a22eb 82%, transparent); }
+#lapAlert strong { color: #ebc799; }
+#pickupToast .toast-card { background: #2b2a25ed; }
+#countdown { color: var(--theme-ink); text-shadow: 0 2px 10px #e9dac066; }
+#finish { background: #241c1426; }
+#finish .card { background: #eee3d0; color: var(--theme-ink); border-color: #bda98a; border-top-color: var(--theme-accent); }
+#finish .card::before, .race-reward strong { color: #94512f; }
+#finish h2, #finish.win h2, #finish.loss h2 { color: #34332d; text-shadow: none; }
+#finish p, .race-reward span { color: #675d4f; }
+.result-stats { border-color: #bda98a80; }
+.result-stats small { color: #756b5c; }
+.result-stats strong { color: #34332d; }
+#finish .btn.primary, #openWorkshop { background: var(--theme-accent); color: #fff2dc; box-shadow: none; }
+#finish .btn:not(.primary) { color: var(--theme-ink); border-color: #bda98a; background: #e2d5bd; }
+/* Race hub and workshop share the same colors as the circuit HUD. */
+#intro { color: var(--theme-ink); }
+.intro-veil { background: linear-gradient(105deg, #f0e5d2eb, #ecdfc6a6 44%, #dec8a23b 75%), linear-gradient(0deg, #57433155, transparent 50%); }
+.intro-topbar { background: #ede2ccbb; border-bottom-color: var(--theme-line); }
+.brand, .feature-meta h2 { color: var(--theme-ink); }
+.brand span, .eyebrow, .feature-stats strong { color: var(--theme-accent); }
+.tagline, .feature-meta p { color: #665a49; }
+.hero-badges span { background: #eee2ccd9; border-color: #bca58266; color: #66533c; }
+.feature-meta { background: #ebdfc9d9; border-color: #baa17b66; }
+.feature-index { color: #81634622; }
+.career-card, .intro-dock { background: #302e28ed; border-color: #cbb38d44; }
+.career-card small, #careerWins { color: #c9b99e; }
+.career-card strong { color: #f2e6d0; }
+.career-card strong em { color: #d2ad7a; }
+#careerSave { color: #675c4b; opacity: 1; }
+.car-card { background: #464137; border-color: #ad96732b; }
+.car-card.selected { background: #5a4936; border-color: #c18b57; box-shadow: inset 0 0 0 1px #c18b5733; }
+.car-card h3 { color: #f1e4cd; }
+.car-card p { color: #c0af91; }
+.track-pick, .laps-pick, #trackDescription { color: #d9c8ab; }
+.track-pick button, .laps-pick button { background: #4b453a; color: #e4d5bb; border-color: #aa916846; }
+.track-pick button.on, .laps-pick button.on { background: #e3d2b2; color: #3d3327; border-color: #d4ae7b; }
+#raceBtn { background: #ad5935; color: #fff0d6; box-shadow: none; }
+.menu-hint { color: #685944; }
+#workshop { background: #eee3cf; color: #302f29; border-color: #b9a27e; }
+#workshop::backdrop { background: #29231bc9; }
+.workshop-header, .workshop-showroom { border-color: #b7a18044; }
+.workshop-header small { color: #925332; }
+.workshop-showroom { background: radial-gradient(ellipse at 50% 40%, #cfbb982e, transparent 65%); }
+#closeWorkshop, #workshopCar { background: #e2d3b9; color: #363026; border-color: #b9a27e88; }
+.workshop-showroom label, #previewStatus, .workshop-showroom h3 small, .workshop-wallet span { color: #74654f; }
+#workshopStats { border-color: #b7a18066; color: #805034; }
+#paintOptions button { background: #e2d3b9; color: #463a29; }
+#paintOptions button[aria-pressed=true] { border-color: #9e613e; }
+.workshop-wallet strong { color: #985832; }
+.upgrade-card { background: #f5eddd; border-color: #bba48366; }
+.upgrade-card h3 small { color: #985832; }
+.upgrade-card p, .earning-guide, #workshopSave { color: #71634e; }
+.upgrade-levels i { background: #cfbfa4; }
+.upgrade-levels i.filled { background: #ad7247; }
+.upgrade-card button { background: #ad5935; color: #fff2df; }
+.upgrade-card button:disabled { background: #d5c5ab; color: #695c48; opacity: 1; }
+#workshopNotice { color: #526745; }
+#touchTools button, #touchControls button { background: #3b372ee8; border-color: #d7c3a25e; color: #efe2cc; }
+#touchControls .touch-throttle { background: #ad5935; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline-color: #a75b35; }
+
+/* A shallow bottom report preserves the race view above it. */
+#finish { align-items: flex-end; justify-content: center; background: transparent; padding: 12px 16px; }
+#finish .card {
+  display: grid; grid-template-columns: minmax(150px, 1fr) minmax(240px, 1.2fr) minmax(240px, 1.1fr);
+  grid-template-areas: 'title stats actions' 'message reward actions';
+  gap: 6px 20px; align-items: center; text-align: left;
+  width: min(960px, 100%); max-width: 100%; max-height: 40%;
+  padding: 14px 18px; border-radius: 12px; animation: none;
+}
+#finish .card::before { display: none; }
+#finish h2 { grid-area: title; font-size: 27px; line-height: 1; margin: 0; }
+#finish p { grid-area: message; font-size: 11px; line-height: 1.4; margin: 0; }
+#finish .result-stats { grid-area: stats; gap: 12px; margin: 0; padding: 0; border: 0; text-align: center; }
+#finish .result-stats div { gap: 4px; }
+#finish .result-stats strong { font-size: 17px; }
+#finish .race-reward { grid-area: reward; gap: 2px; margin: 0; text-align: center; }
+#finish .race-reward strong { font-size: 11px; letter-spacing: 0; }
+#finish .race-reward span { font-size: 10px; }
+#finish .finish-actions { grid-area: actions; gap: 6px; margin: 0; }
+#finish .btn { padding: 10px 8px; font-size: 14px; letter-spacing: .02em; }
+@media (max-width: 800px) {
+  #finish .card { grid-template-columns: 1fr 1.3fr; grid-template-areas: 'title stats' 'message reward' 'actions actions'; gap: 8px 12px; padding: 12px 14px; }
+  #finish .result-stats strong { font-size: 15px; }
+  #finish h2 { font-size: 24px; }
+}
+/* Lap feedback occupies the existing timing slot, away from the road ahead. */
+#lapAlert { left: 24px; top: 335px; width: 200px; padding: 10px 12px; text-align: left; gap: 4px; transform: none; border: 1px solid #ba7952; border-radius: 9px; background: #302a22f2; transition: opacity .2s; }
+#lapAlert.on { transform: none; }
+#lapAlert strong { font-size: 9px; letter-spacing: .1em; }
+#lapAlert span { font-size: 18px; }
+#hud:has(#lapAlert.on) #lapTiming { visibility: hidden; }
+@media (max-width: 900px), (max-height: 650px) {
+  #lapAlert { left: 12px; top: 178px; width: 148px; padding: 8px 10px; }
+}
+@media (max-width: 420px) {
+  #finish .card { padding: 10px 12px; }
+  #finish .result-stats strong { font-size: 15px; }
+  .intro-actions { grid-template-columns: minmax(0,1fr) 130px; }
+  .intro-actions #raceBtn { width: 130px; padding-inline: 10px; }
+}
+@media (pointer: coarse) { #finish .btn { min-height: 44px; } }

@@ -1,0 +1,73 @@
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const fixture = async raw => {
+  const { Career } = await import('../progression.js');
+  let saved = raw;
+  const storage = { getItem: () => saved, setItem: (_, value) => { saved = value; } };
+  return { career: new Career(storage, ['muscle', 'van']), reload: () => new Career(storage, ['muscle','van']) };
+};
+test('race finishes pay once, balance persists, podium reward is highest', async () => {
+  const { career, reload } = await fixture();
+  assert.equal(career.state.points, 0);
+  assert.equal(career.reward('race1',1),900);
+  assert.equal(career.reward('race1',1),0);
+  assert.equal(career.reward('race2',2),600);
+  assert.equal(career.reward('race3',8),150);
+  assert.equal(career.reward('lost',0),0);
+  assert.equal(career.reward('invalid',NaN),0);
+  const loaded = reload();
+  assert.equal(loaded.state.points,1650);
+  assert.equal(loaded.state.wins,1);
+  assert.equal(loaded.state.races,3);
+});
+test('upgrades enforce price, level cap and per-car ownership', async () => {
+  const { career, reload } = await fixture();
+  assert.equal(career.purchase('muscle','engine'),false);
+  for(let i=0;i<5;i++) career.reward(i,1);
+  const balance = career.state.points;
+  for(let i=0;i<3;i++) assert.equal(career.purchase('muscle','engine'),true);
+  assert.equal(career.purchase('muscle','engine'),false);
+  assert.equal(career.purchase('muscle','__proto__'),false);
+  assert.equal(career.purchase('no-car','handling'),false);
+  assert.equal(career.state.points,balance-1900);
+  assert.equal(career.state.cars.van.engine,0);
+  assert.equal(reload().state.cars.muscle.engine,3);
+});
+test('tuning changes player stats without mutating stock car definitions', async () => {
+  const { career } = await fixture();
+  for(let i=0;i<8;i++) career.reward(i,1);
+  for(const type of ['engine','handling','armor']) for(let i=0;i<3;i++) career.purchase('muscle',type);
+  const stock = {id:'muscle',maxSpeed:38,accel:24,steer:1.55,brake:38};
+  const tuned = career.tune(stock);
+  assert.ok(Math.abs(tuned.maxSpeed-42.56)<1e-8);
+  assert.ok(Math.abs(tuned.accel-29.76)<1e-8);
+  assert.ok(Math.abs(tuned.damageFactor-.64)<1e-8);
+  assert.ok(tuned.steer>stock.steer && tuned.brake>stock.brake);
+  assert.equal(stock.maxSpeed,38);
+  assert.equal(career.tune({...stock,id:'van'}).maxSpeed,38);
+});
+test('paint persists per vehicle without charging points', async () => {
+  const { career, reload } = await fixture();
+  assert.equal(career.paint('muscle',2),true);
+  assert.equal(career.paint('muscle',-1),false);
+  assert.equal(career.paint('muscle',999),false);
+  assert.equal(career.state.points,0);
+  assert.equal(reload().state.cars.muscle.paint,2);
+  assert.equal(reload().state.cars.van.paint,0);
+});
+test('malformed storage is sanitized and blocked storage retains session progress', async () => {
+  const { career } = await fixture(JSON.stringify({version:1,points:-100,cars:{muscle:{engine:900,armor:-3,paint:NaN}}}));
+  assert.equal(career.state.points,0);
+  assert.equal(career.state.cars.muscle.engine,3);
+  assert.equal(career.state.cars.muscle.armor,0);
+  assert.equal(career.state.cars.muscle.paint,0);
+  const broken = await fixture('{broken');
+  assert.equal(broken.career.state.points,0);
+  const { Career } = await import('../progression.js');
+  const blocked = new Career(null,['muscle']);
+  assert.equal(blocked.saved,false);
+  assert.equal(blocked.reward(1,1),900);
+  assert.equal(blocked.saved,false);
+  assert.equal(blocked.purchase('muscle','engine'),true);
+  assert.equal(blocked.state.points,600);
+});

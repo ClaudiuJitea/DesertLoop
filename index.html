@@ -1833,6 +1833,9 @@
       transform: translateY(-1px);
     }
   </style>
+  <link rel="stylesheet" href="gameplay.css">
+  <link rel="stylesheet" href="garage.css">
+  <link rel="stylesheet" href="desert-theme.css">
 </head>
 <body>
   <div id="intro">
@@ -1889,14 +1892,16 @@
     <div class="intro-veil"></div>
     <div class="intro-layout">
       <header class="intro-hero">
-        <p class="eyebrow">Open Circuit · Nitro Season</p>
+        <p class="eyebrow">Race · Earn · Build Your Legend</p>
         <h1 class="brand">Desert <span>Loop</span></h1>
-        <p class="tagline">Choose your machine and own the desert. Hit the boost line, master the sweepers, and race for the flag.</p>
+        <p class="tagline">Four worlds. One garage. Race the desert, city, alpine forest, and coast. Earn points at the flag, upgrade your machine, and come back faster.</p>
         <div class="hero-badges">
           <span>8 racers</span>
-          <span>Boost pads</span>
+          <span>4 circuits</span><span>Car upgrades</span>
           <span id="trackLengthBadge">1,820 m circuit</span>
         </div>
+        <div class="career-card"><div><small>YOUR CAREER</small><strong><span id="careerPoints">0</span> <em>PTS</em></strong><span id="careerWins">0 wins · 0 finishes</span></div><button type="button" id="openWorkshop">Open garage <span>Upgrade & customize →</span></button></div>
+        <p id="careerSave">Progress saved on this device</p>
       </header>
       <div class="intro-feature">
         <div class="feature-index" id="featureIndex">03</div>
@@ -1915,12 +1920,13 @@
       <div class="intro-dock">
         <div class="garage" id="garage"></div>
         <div class="intro-actions">
-          <button class="btn primary" id="raceBtn" type="button">Start race</button>
           <div class="track-pick">
             <span>Track</span>
             <div class="track-btns">
               <button type="button" data-track="american-desert" class="on" title="American Desert Canyon">Desert</button>
               <button type="button" data-track="city" title="City Circuit">City</button>
+              <button type="button" data-track="alpine-pass" title="Alpine Pass">Alpine Pass</button>
+              <button type="button" data-track="sunset-coast" title="Sunset Coast">Sunset Coast</button>
             </div>
           </div>
           <div class="laps-pick">
@@ -1930,10 +1936,12 @@
               <button type="button" data-laps="5">5</button>
             </div>
           </div>
+          <button class="btn primary" id="raceBtn" type="button" disabled>Start race</button>
         </div>
+        <p id="trackDescription">Choose your circuit</p>
       </div>
     </div>
-    <div class="menu-hint">Select car · Choose track & laps · Start race</div>
+    <div class="menu-hint">1st: 900 PTS · 2nd: 600 PTS · 3rd: 450 PTS · Every finish earns points</div>
   </div>
 
   <div id="countdown"></div>
@@ -1944,7 +1952,12 @@
       <div class="speed-lines"></div>
       <div class="speed-warp"></div>
     </div>
+    <div id="impactFx" aria-hidden="true"></div>
     <div id="title">American Desert</div>
+    <div id="cornerPreview"><b id="cornerIcon">↑</b><span><small>UP AHEAD</small><strong id="cornerLabel">OPEN STRAIGHT</strong></span></div>
+    <div id="raceBoard" class="panel"><span class="hud-kicker">THE FIELD <i>LIVE</i></span><div id="raceBoardRows"></div></div>
+    <div id="lapTiming" class="panel"><span><small>CURRENT LAP</small><strong id="lapClock">00:00.0</strong></span><span><small>BEST LAP</small><strong id="bestLap">—</strong></span></div>
+    <div id="lapAlert" role="status"><strong>LAP COMPLETE</strong><span>00:00.0</span></div>
     <div id="radioHud" class="panel radio-hud off" aria-label="Desert Loop Radio">
       <div class="radio-body">
         <div class="radio-eq off" id="radioEq" aria-hidden="true">
@@ -1980,6 +1993,9 @@
     </div>
     <div id="place" class="panel">1st</div>
     <div id="lap" class="panel">Lap <span class="num" id="lapCount">1</span> / <span id="lapTotal">3</span></div>
+    <div id="raceTelemetry" class="panel"><span class="hud-kicker">RACE TIME</span><strong id="raceTime">00:00.0</strong><div class="race-progress"><div id="raceProgress"></div></div></div>
+    <div id="circuitMap" class="panel" aria-label="Circuit map: your car is orange, rivals are white"><span class="hud-kicker">LIVE CIRCUIT</span><svg viewBox="0 0 180 180" aria-hidden="true"><path id="circuitRoute"/><rect id="circuitStart" width="8" height="8"/><g id="circuitCars"></g></svg><span class="map-legend">● YOU <span>○ FIELD</span></span></div>
+    <div id="driveHelp"><kbd>W A S D</kbd> Drive <kbd>SPACE</kbd> Brake <kbd>N</kbd> Nitro <kbd>V</kbd> Camera <kbd>R</kbd> Recover <kbd>ESC</kbd> Garage</div>
     <div id="speedo" aria-label="Speedometer">
       <svg viewBox="0 0 200 200" role="img" aria-hidden="true">
         <defs>
@@ -2002,6 +2018,9 @@
         </g>
         <circle class="hub-outer" cx="100" cy="100" r="9" />
         <circle class="hub-inner" cx="100" cy="100" r="4.5" />
+        <text id="speedValue" x="100" y="151" text-anchor="middle">000</text>
+        <text class="speed-unit" x="100" y="167" text-anchor="middle">KM/H</text>
+        <text id="driveState" x="100" y="185" text-anchor="middle">IDLE</text>
       </svg>
     </div>
     <div id="nitroHud" class="meter empty" aria-label="Nitro">
@@ -2052,6 +2071,11 @@
         </div>
       </div>
     </div>
+    <div id="touchTools"><button type="button" id="touchRecover">Recover</button><button type="button" id="touchCamera">Camera</button><button type="button" id="touchGarage">Garage</button></div>
+    <div id="touchControls" aria-label="Driving controls">
+      <div class="touch-group"><button type="button" data-drive-key="KeyA" aria-label="Steer left">◀</button><button type="button" data-drive-key="KeyD" aria-label="Steer right">▶</button></div>
+      <div class="touch-group"><button type="button" id="touchNitro" aria-label="Use nitro">NITRO</button><button type="button" data-drive-key="Space" aria-label="Brake">BRAKE</button><button type="button" data-drive-key="KeyW" class="touch-throttle" aria-label="Accelerate">GAS</button></div>
+    </div>
     <div id="boostHud">BOOST</div>
   </div>
 
@@ -2059,13 +2083,22 @@
     <div class="card">
       <h2 id="finishTitle">Finished</h2>
       <p id="finishMsg"></p>
+      <div class="result-stats"><div><small>RACE TIME</small><strong id="resultTime">—</strong></div><div><small>BEST LAP</small><strong id="resultLap">—</strong></div><div><small>TOP SPEED</small><strong id="resultSpeed">—</strong></div></div>
+      <div class="race-reward"><strong id="resultReward">Finish a race to earn upgrade points</strong><span id="resultBalance">0 points available in your garage</span></div>
       <div class="finish-actions">
         <button class="btn primary" id="againBtn" type="button">Race again</button>
-        <button class="btn" id="menuBtn" type="button">Garage</button>
+        <button class="btn" id="upgradeAfterRace" type="button">Upgrade car</button><button class="btn" id="menuBtn" type="button">Race hub</button>
       </div>
     </div>
   </div>
 
+  <dialog id="workshop" aria-labelledby="workshopTitle">
+    <header class="workshop-header"><div><small>DESERT LOOP / PERFORMANCE LAB</small><h2 id="workshopTitle">Your garage</h2></div><button type="button" id="closeWorkshop" aria-label="Close garage">Close ×</button></header>
+    <div class="workshop-layout">
+      <section class="workshop-showroom"><label for="workshopCar">SELECT MACHINE</label><select id="workshopCar"></select><div class="preview-stage"><canvas id="garagePreview" aria-label="Rotating 3D preview of your customized car"></canvas></div><p id="previewStatus" role="status">Preparing your car…</p><p id="workshopStats"></p><h3>Paint studio <small>Included · no points needed</small></h3><div id="paintOptions"></div></section>
+      <section class="workshop-upgrades"><div class="workshop-wallet"><span>AVAILABLE POINTS</span><strong id="workshopBalance">0 PTS</strong></div><div id="upgradeList"></div><p class="earning-guide">Earn 900 points for a win, 600 for second, or 450 for third. Every completed race pays out. Each upgrade belongs to the selected car.</p><p id="workshopSave"></p><p id="workshopNotice" role="status"></p></section>
+    </div>
+  </dialog>
   <script type="module" src="./game.js"></script>
 </body>
 </html>
